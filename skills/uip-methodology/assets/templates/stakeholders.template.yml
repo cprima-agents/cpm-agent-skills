@@ -1,0 +1,23 @@
+version: "0.1"
+
+# The stakeholders of the project. It lives in the repository the documents are generated into
+# (for example docs/stakeholders.yaml), not in the skill.
+# `cli.py build-data --stakeholders docs/stakeholders.yaml` reads it. The business contacts fill the
+# PDD chapter 1.2 Stakeholders, the technical contacts fill the SDD chapter 2.1.
+# An empty list leaves the table at [TBD].
+#
+# Text = text a person reads. Always a pair, both keys required: { de: string, en: string }
+# (checked by scripts/lint_yaml_text.py; the file name must start with "stakeholders").
+
+contacts_business:
+  - name: string                # required
+    role: process-owner         # required; process-owner | sponsor | ba | pm | works-council | dpo | other
+    email: string               # required
+    org_unit: string            # optional
+    notes: Text                 # optional
+
+contacts_technical:
+  - name: string                # required
+    role: string                # required; free text, for example "Firewall administrator"
+    system: SYSTEM_ID           # required; a system id of systems.yaml, shown as the label of that system
+    email: string               # required

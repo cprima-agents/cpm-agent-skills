@@ -49,10 +49,7 @@ Record all key contacts so every team member knows who to reach for business dec
 <!-- Who are the key contacts? List process owner, business sponsor, BA, PM, Works Council rep, and DPO with name, email, and org unit. -->
 
 <!-- #region contacts_business -->
-| Role | Name | Email | Org Unit | Notes |
-| --- | --- | --- | --- | --- |
-| Process Owner | Jane Smith | jane.smith@example.com | Finance | |
-| Business Analyst | John Doe | john.doe@example.com | IT | CoE contact |
+[TBD]
 <!-- #endregion contacts_business -->
 
 ### 1.3 Prerequisites for Automation
@@ -122,18 +119,16 @@ Catalogue every application and platform component the robot must interact with 
 <!-- List every application the current manual process touches — name, version, automation surface (ui / api / database / file / email / queue), and access method. For each business application, state whether it has been automated before in any project. Also list all UiPath platform components in use (Robot, Orchestrator, etc.) with category: platform. -->
 
 <!-- #region applications -->
-| Name | Category | Version | Automation Surface | Access Method | In Scope | Previously Automated |
-| --- | --- | --- | --- | --- | --- | --- |
-| SAP ECC | application | 6.0 EHP8 | ui | UI automation | Yes | No |
-| UiPath Unattended Robot | platform | 2023.10 | platform | Robot runtime | Yes | — |
-| UiPath Orchestrator | platform | Cloud | platform | Queue / Assets / Schedule | Yes | — |
+[TBD]
 <!-- #endregion applications -->
 
 ### 2.4 AS-IS Process Map
 
-<!-- Attach diagram or embed image. Highlight each manual step. -->
+<!-- The high-level map is generated from process.yaml (render-diagrams, then build-data --diagrams-dir): an image if it could be exported, else the Mermaid text, else [TBD]. -->
 
+<!-- #region process_map -->
 [TBD — attach high-level map]
+<!-- #endregion process_map -->
 
 [TBD — attach keystroke-level map]
 
@@ -144,13 +139,7 @@ Map every manual step — including branches, exceptions, and system touch-point
 <!-- Walk me through every manual step in the current process from trigger to completion — systems touched, actions taken, and who performs each step. -->
 
 <!-- #region process_steps -->
-| Step | Input | Description | Next Step | On Exception | Pipeline Stage | Business Rule |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | Email with invoice PDF | Open SAP inbox | 2 | | ingest | |
-| 2 | Email | Validate PO number in SAP | 3 | BE-01 | decide | PO must exist before posting |
-| 3 | PO data | Post invoice in SAP MIRO | END | SE-01 | execute | |
-| BE-01 | — | Log missing PO, skip transaction | END | | | |
-| SE-01 | — | SAP login failed, retry | 3 | END | | |
+[TBD]
 <!-- #endregion process_steps -->
 
 <!-- Screen / Reference column reserved for future release: relative path to .screenshots/ folder or UiPath Studio object repository entry. -->
@@ -161,11 +150,11 @@ List every input the process works with — documents, database records, API res
 
 <!-- What inputs does this process work with? For each: what is it called, which steps use it, which system does it come from, in what format does it arrive, and is it structured or unstructured? -->
 
-<!-- #region entities -->
+<!-- #region process_data -->
 | Input | Steps | Source System | Input Format | Location | Structured |
 | --- | --- | --- | --- | --- | --- |
 | [TBD] | | | | | |
-<!-- #endregion entities -->
+<!-- #endregion process_data -->
 
 <!-- Structured: fixed fields, machine-readable — e.g. Excel cell, on-screen form field. Not structured: PDF without embedded fields, scanned image, free text. -->
 
@@ -173,9 +162,11 @@ List every input the process works with — documents, database records, API res
 
 ### 3.1 TO-BE Process Map
 
-<!-- Highlight robot-automated steps. Note any process improvements vs. AS-IS. -->
+<!-- Generated from process.yaml: the pipeline stages of the robot run and what happens in each. -->
 
+<!-- #region pipeline_stages -->
 [TBD — attach TO-BE map with automated steps highlighted]
+<!-- #endregion pipeline_stages -->
 
 ### 3.2 Parallel Initiatives
 
@@ -220,9 +211,7 @@ Enumerate the data conditions that make a transaction unprocessable so the robot
 #### Known Business Exceptions
 
 <!-- #region business_exceptions -->
-| Name | Step | Trigger | Robot Action |
-| --- | --- | --- | --- |
-| Missing PO | Step 3 | PO field empty or not found in SAP | Log as business exception; skip to next item |
+[TBD]
 <!-- #endregion business_exceptions -->
 
 #### Default Handling for Unanticipated Business Exceptions
@@ -269,11 +258,15 @@ Define the monitoring and reporting outputs the business and operations teams ne
 | 4 | [TBD] | | | |
 <!-- #endregion reporting_requirements -->
 
-## 4. Other Observations
+## 4. Decisions
 
-<!-- #region observations_discovery -->
-[TBD — monitoring, audit, compliance, or business-specific observations from process interviews]
-<!-- #endregion observations_discovery -->
+The decisions the process makes, each with its question, the data it reads and its rules. A rule with the status "Open" has not been decided by the business. The steps in chapters 2 and 3 point here.
+
+<!-- Generated from decisions.yaml: one numbered section per decision. -->
+
+<!-- #region decisions -->
+[TBD]
+<!-- #endregion decisions -->
 
 ## 5. Additional Documentation
 

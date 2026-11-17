@@ -165,7 +165,7 @@ Work through the 5 PDD sections in order. For each section:
 1. Introduction (Purpose, Objectives, Key Contacts, Prerequisites)
 2. AS-IS Process Description (Overview, Applications, Process Map, Steps, Input Data)
 3. TO-BE Process Description (Scope, Exceptions, Reporting)
-4. Other Observations
+4. Decisions (one numbered section per decision: question, data it reads, rules with their status)
 5. Additional Documentation
 
 ### 2. Write the file
@@ -374,6 +374,41 @@ uv run .claude/skills/uip-methodology/scripts/generate_roi_chart.py docs/arch-re
 
 ---
 
+## Workflow E — Bilingual documents from yaml (German and English)
+
+Every document comes out twice, as two separate files: one in German (`de`), one in English (`en`). Never one mixed file.
+
+The source of truth is the yaml files, with every reader-facing text written as a pair `{ de: ..., en: ... }` (see Shared Rules):
+
+- `process.yaml` — steps and edges (a network, with sub-steps), exceptions, terminal states, lanes. In the to-be model the seven pipeline stages (initialize, ingest, enrich, decide, execute, complete, finalize) are container steps (`stage:` on a top-level task); the steps of a stage name it as `parent`, per model: `parent: { to-be: INGEST }`. PDD 3.1 lists the stages from these containers.
+- `systems.yaml` — the systems and what the robot does in them
+- `decisions.yaml` — the decisions at the gateways
+
+Steps, in this order:
+
+1. **Lint the yaml** and fix all FAILs:
+   ```bash
+   uv run .claude/skills/uip-methodology/scripts/lint_yaml_text.py docs/process.yaml docs/systems.yaml docs/decisions.yaml
+   ```
+1b. **Render the diagrams** (optional, needed for the process map of the PDD): `cli.py render-diagrams --process docs/process.yaml -o docs/diagrams` writes `<diagram-id>.<lang>.generated.drawio`, `.mmd` and `.png` (or `.svg` with `--format`). The png and svg are exported with the draw.io desktop app; when it is missing or the export fails, that is only a warning. Only `.generated` files are written; a copy without `.generated` is never touched.
+2. **Build the project data** from the yaml files. Add `--diagrams-dir docs/diagrams` to put the AS-IS high-level map into PDD section 2.4 (the image if it exists, else the Mermaid text, else `[TBD]`), and `--data-model docs/data-model.yaml` to fill PDD section 2.6 with the data containers (the entities of the data model grouped by `source.container`, one row per container).
+   Text pairs stay pairs, step numbers are derived, nothing is typed by hand. The process steps of the PDD (section 2, AS-IS) come from the as-is model; the business exceptions (section 3, TO-BE) from the to-be model. Other keys already in the output file are kept:
+   ```bash
+   uv run --project .claude/skills/uip-methodology/ .claude/skills/uip-methodology/scripts/cpm_rpa/cli.py build-data --process docs/process.yaml --systems docs/systems.yaml --decisions docs/decisions.yaml --output docs/project-data.yaml
+   ```
+3. **Render each language** into its own file:
+   ```bash
+   uv run --project .claude/skills/uip-methodology/ .claude/skills/uip-methodology/scripts/cpm_rpa/cli.py render pdd --lang de --output docs/<process>-pdd.de.md
+   uv run --project .claude/skills/uip-methodology/ .claude/skills/uip-methodology/scripts/cpm_rpa/cli.py render pdd --lang en --output docs/<process>-pdd.en.md
+   ```
+   `--lang` picks the matching template (`<artefact>-template.<lang>.md`) and snippet (`snippets/<name>.<lang>.md`); a missing German file falls back to the English one. Today only the PDD has German templates; the SDD, TDD, estimation and ROI are English until their `.de.md` templates exist.
+4. **Lint both documents** with `lint_docs.py`.
+
+**A data field must not map to one single column.** In data-driven generation the data says what a thing is (`description`, `where`, `next`, `rules`), and the snippet decides how it is shown; one field may appear in several places, and one table cell may combine several fields. Never name a field after the column that shows it. The PDD step table (2.5) is the example: two columns, `Step | What happens`, where the cell holds the description, the system and the screenshots, a divider, and then the next steps, rules and exceptions. Because merged cells cannot be read back, such a region is generated only and not parsed back (`from_markdown` is empty in the schema).
+Each part of such a cell is a `<span custom-style="…">`: `StepDescription`, `StepSystem`, `StepNext`, `StepRule`, `StepException`, and `StepDivider` for the divider (a line of dashes). The names are the same in German and English. The parts are separated by `<br>`. Never use `<hr>` in a cell: when pandoc writes docx, everything after it in the cell is lost. Markdown is only a step on the way to docx or PDF; convert with the filter that turns `<br>` into a Word line break, and the spans arrive as named Word styles: `pandoc document.md --lua-filter assets/pandoc/cell-breaks.lua -o document.docx`.
+
+A generated document is never edited by hand. To change it, change the yaml and render again. Text that the yaml cannot supply (stakeholders, volume, scope) renders as `[TBD]`.
+
 ## Shared Rules
 
 - Never invent selectors, UI element identifiers, or field names — mark as `[DEV: inspect at build time]`.
@@ -387,6 +422,23 @@ uv run .claude/skills/uip-methodology/scripts/generate_roi_chart.py docs/arch-re
   uv run --project .claude/skills/uip-methodology/ .claude/skills/uip-methodology/scripts/lint_docs.py docs/<artefact-file>.md
   ```
   Exit code 1 means failures remain — fix them and re-run. List remaining WARNs to the user (TBD count, SME review items, etc.).
+- **Yaml data files (`process`, `decisions`, `systems`, `data-model`) follow two rules; run the yaml linter after writing or amending one and fix all FAILs:**
+  ```bash
+  uv run .claude/skills/uip-methodology/scripts/lint_yaml_text.py docs/<file>.yaml
+  ```
+  - Every field marked `Text` in `assets/templates/*.template.yml` is a pair `{ de: ..., en: ... }`, both keys filled. A plain string is an error. Identifiers, refs, enums and names stay single values.
+  - An item may carry `status: New | InProgress | UnderReview | Approved | Rejected | Complete`. The key may be missing. When present it must be one of these six spellings; an empty status is an error. Never set a status the user has not given.
+  - An item may carry `tags: [kebab-case-word, ...]`. The key may be missing. The tag `open-question` marks an open question: it is open while the status is `New`, `InProgress`, `UnderReview` or missing, and answered once the status is `Approved`, `Rejected` or `Complete`. Never write "is not decided" or "not verified" into free text; use the tag.
+  - **A process is a network of steps, not a numbered list.** `process.yaml` holds `steps` (each with a readable, stable `id`) and `edges` (`from`, `to`, pointing forward). Never write a sequence number into a yaml file, a label or free text; refer to a step by its id. Order and numbers (1, 2, … and 6.1, 6.2) are derived by the view layer (`scripts/yaml_graph.py`, `number()`), and the diagram level by `views`.
+    - A step with `parent` is a sub-step; edges connect steps of the same level only. The top level has one `start_event`; each sub-level has one entry step and at least one exit step.
+    - A gateway has `kind` (`exclusive`, `inclusive`, `parallel`) and `role` (`split`, `join`). An inclusive or parallel split needs exactly one join (`closes` names the split) and every branch must reach it; an exclusive split needs none. Every branch of an exclusive or inclusive split carries a `condition`.
+    - A cycle is allowed only on an edge tagged `loop`.
+    - **Models and diagrams.** `as-is` and `to-be` are the two process models of the requirements lifecycle: the as-is model describes what exists, the to-be model specifies what shall exist. They are not states and not phases; do not call them that. One process file holds both. An item (step, edge, exception, terminal state) says which with `models: [as-is]`, `[to-be]` or `[as-is, to-be]`; a missing `models` means both. A step that sits in different places in the two models is two steps. Each model is linted as a graph of its own.
+    - A **diagram** renders one or both models (both = a comparison) at a level of detail, `high-level` (top-level steps) or `detailed` (with sub-steps). Diagrams are defined once under `diagrams` (`id`, `title`, `models`, `detail`); a step may limit itself to some diagrams with `diagrams: [ID]`. Every diagram is linted as a graph too.
+    - **Pipeline stages.** A step may carry `stage`, one of `initialize`, `ingest`, `enrich`, `decide`, `execute`, `complete`, `finalize` (defined once, as `enums.pipeline_stage` in `references/rpa-methodology.yaml`, with a German and English purpose; these are the code-guideline stages of the robot run, in this order). A sub-step without `stage` takes its parent's. Never write `init`; the stage is `initialize`.
+    - **A system is an entity with an `id`**, not a name: `systems.yaml` items have `id` (UPPER_SNAKE_CASE, unique, never renamed once referenced, e.g. `MEINSERVICE`) and `label` (the display name). A `system:` in `process.yaml`, `decisions.yaml` or `credentials.yml` refers to that id. The key `name` is a linter error.
+    - Never put a tool-specific shape id (`drawio_id` and the like) into a yaml file. If a drawn diagram must stay linked, keep the mapping in a separate file next to it.
+    - `decisions.yaml` has no `sequence`; its `id` is the gateway step it decides.
 - **Preserve all `<!-- #region name -->` / `<!-- #endregion name -->` markers** from the template verbatim. These are load-bearing: the parser (`cpm_rpa/parser.py`) uses them to extract structured data for rendering. Write the captured content *between* the tags, never outside or instead of them. A region with no data gets `[TBD]` between its tags — never an empty or missing block. Never strip, rename, or reorder region markers.
 - **Generate Mermaid diagrams from a `code-structure.yml`** using the `mermaid` CLI subcommand:
   ```bash

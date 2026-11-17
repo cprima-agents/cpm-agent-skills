@@ -46,6 +46,9 @@ def render(
     config_test: Path | None = typer.Option(None, "--config-test", help="Config_Test.toml path"),
     config_prod: Path | None = typer.Option(None, "--config-prod", help="Config_Prod.toml path"),
     adr_dir: Path | None = typer.Option(None, "--adr-dir", help="Directory containing ADR YAML files (docs/adr/)"),
+    lang: str | None = typer.Option(
+        None, "--lang", "-l", help="de or en: choose that language of every text pair, and the matching template"
+    ),
 ) -> None:
     """Render one artefact template from `project-data.yaml`.
 
@@ -53,12 +56,15 @@ def render(
     project metadata and environment config, and writes the rendered markdown
     to the selected output path.
     """
+    if lang not in (None, "de", "en"):
+        typer.echo("ERROR: --lang must be 'de' or 'en'.", err=True)
+        raise typer.Exit(1)
     if not data.exists():
-        typer.echo(f"ERROR: {data} not found — run 'parse' first or create it manually.", err=True)
+        typer.echo(f"ERROR: {data} not found — run 'build-data' or 'parse' first, or create it manually.", err=True)
         raise typer.Exit(1)
 
     project_data = _YAML(typ="safe").load(data.read_text(encoding="utf-8")) or {}
-    out = output or DEFAULT_DOCS / f"{artefact}.md"
+    out = output or DEFAULT_DOCS / (f"{artefact}.{lang}.md" if lang else f"{artefact}.md")
 
     # Collect only the environment config files the caller actually supplied.
     config_paths: dict[str, Path] = {}
@@ -74,8 +80,108 @@ def render(
         project_json_path=project,
         config_paths=config_paths or None,
         adr_dir=adr_dir,
+        lang=lang,
+        asset_base=data.parent,
     )
     typer.echo(f"Rendered: {out}")
+
+
+# ---------------------------------------------------------------------------
+# render-diagrams
+# ---------------------------------------------------------------------------
+
+
+@app.command("render-diagrams")
+def render_diagrams(
+    process: Path = typer.Option(..., "--process", help="process.yaml"),
+    out_dir: Path = typer.Option(Path("docs/diagrams"), "--out-dir", "-o", help="folder for the .generated files"),
+    lang: str = typer.Option("de,en", "--lang", "-l", help="comma-separated: de, en"),
+    diagram: str | None = typer.Option(None, "--diagram", help="comma-separated diagram ids; default: all"),
+    fmt: str = typer.Option(
+        "drawio,mermaid,png", "--format", "-f", help="comma-separated: drawio, mermaid, png, svg"
+    ),
+) -> None:
+    """Write the diagrams of `process.yaml` as `<id>.<lang>.generated.drawio`, `.mmd`, `.png` and `.svg`.
+
+    All formats are built from the same graph, so they show the same steps, numbers and links. png and svg are
+    exported from the .drawio file with the draw.io desktop app; when it is missing or the export fails, that is a
+    warning and the other files are still written. Only `.generated` files are written; a working copy (the same
+    name without `.generated`) is never touched.
+    """
+    from cpm_rpa import diagrams as _diagrams
+
+    langs, formats = [x.strip() for x in lang.split(",")], [x.strip() for x in fmt.split(",")]
+    allowed = (*_diagrams.FORMATS, *_diagrams.IMAGE_FORMATS)
+    if any(x not in ("de", "en") for x in langs) or any(x not in allowed for x in formats):
+        typer.echo(f"ERROR: --lang takes de and en; --format takes {', '.join(allowed)}.", err=True)
+        raise typer.Exit(1)
+    data = _YAML(typ="safe").load(process.read_text(encoding="utf-8")) or {}
+    only = [x.strip() for x in diagram.split(",")] if diagram else None
+    written, warnings = _diagrams.write_diagrams(data, out_dir, langs, formats, only)
+    for path in written:
+        typer.echo(f"Written: {path}")
+    for warning in warnings:
+        typer.echo(f"WARN: {warning}", err=True)
+
+
+# ---------------------------------------------------------------------------
+# build-data
+# ---------------------------------------------------------------------------
+
+
+@app.command("build-data")
+def build_data(
+    process: Path = typer.Option(..., "--process", help="process.yaml"),
+    systems: Path = typer.Option(..., "--systems", help="systems.yaml"),
+    decisions: Path | None = typer.Option(None, "--decisions", help="decisions.yaml"),
+    diagrams_dir: Path | None = typer.Option(
+        None, "--diagrams-dir", help="folder of the .generated diagrams; puts the AS-IS high-level map into the PDD"
+    ),
+    data_model: Path | None = typer.Option(
+        None, "--data-model", help="data-model.yaml; fills the PDD input data table (2.6) with the data containers"
+    ),
+    manifest: Path | None = typer.Option(
+        None, "--manifest", help="manifest.yaml of the output repository; the versions, history and status of the documents"
+    ),
+    stakeholders: Path | None = typer.Option(
+        None, "--stakeholders", help="stakeholders.yaml; the business contacts (PDD 1.2) and technical contacts (SDD 2.1)"
+    ),
+    output: Path = typer.Option(DEFAULT_DATA, "--output", "-o", help="project-data.yaml to create or update"),
+) -> None:
+    """Fill `project-data.yaml` from the process, systems and decisions yaml files.
+
+    Only the fields these files can supply are written: process name, short description,
+    applications, process steps with derived numbers, business exceptions and the open
+    questions. Other keys already in the output file are kept. Text pairs stay pairs;
+    `render --lang` picks the language.
+    """
+    from cpm_rpa import from_yaml as _from_yaml
+
+    yaml = _YAML(typ="safe")
+    load = lambda p: yaml.load(p.read_text(encoding="utf-8")) or {}  # noqa: E731
+    derived = _from_yaml.build_project_data(
+        load(process),
+        load(systems),
+        load(decisions) if decisions else None,
+        diagrams_dir=diagrams_dir.resolve() if diagrams_dir else None,
+        base_dir=output.resolve().parent,
+        data_model=load(data_model) if data_model else None,
+        process_dir=process.resolve().parent,
+        manifest=load(manifest) if manifest else None,
+        stakeholders=load(stakeholders) if stakeholders else None,
+    )
+    existing = load(output) if output.exists() else {}
+    for key in ("process_map", "entities", "contacts_business", "contacts_technical"):
+        if key not in derived:
+            existing.pop(key, None)  # nothing found this time: never keep a stale value
+    existing.update(derived)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    yaml.default_flow_style = False
+    yaml.allow_unicode = True
+    stream = StringIO()
+    yaml.dump(existing, stream)
+    output.write_text(stream.getvalue(), encoding="utf-8")
+    typer.echo(f"Written: {output}  ({len(derived)} field(s) from the yaml files)")
 
 
 # ---------------------------------------------------------------------------

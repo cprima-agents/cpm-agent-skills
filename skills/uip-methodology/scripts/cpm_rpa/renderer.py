@@ -7,6 +7,7 @@ metadata when available, and expands template regions backed by snippet files.
 from __future__ import annotations
 
 import json
+import os
 import re
 import tomllib
 from pathlib import Path
@@ -65,21 +66,40 @@ _REGION_RE = re.compile(
 )
 
 
-def _expand_regions(text: str) -> str:
+def _expand_regions(text: str, lang: str | None = None) -> str:
     """Replace region bodies with snippet includes when a snippet exists.
 
     Regions without a backing snippet stay inline. That keeps SA-authored prose
-    and diagrams intact on re-render.
+    and diagrams intact on re-render. With a language, the snippet `<name>.<lang>.md`
+    is used when it exists, otherwise the language-neutral `<name>.md`.
     """
     snippets_dir = TEMPLATES_DIR / "snippets"
 
     def _sub(m: re.Match[str]) -> str:
         name = m.group(1)
-        if (snippets_dir / f"{name}.md").exists():
-            return f"<!-- #region {name} -->\n{{% include 'snippets/{name}.md' %}}\n<!-- #endregion {name} -->"
+        candidates = ([f"{name}.{lang}.md"] if lang else []) + [f"{name}.md"]
+        for file_name in candidates:
+            if (snippets_dir / file_name).exists():
+                return f"<!-- #region {name} -->\n{{% include 'snippets/{file_name}' %}}\n<!-- #endregion {name} -->"
         return m.group(0)
 
     return _REGION_RE.sub(_sub, text)
+
+
+def resolve_text(value: Any, lang: str) -> Any:
+    """Replace every text pair {de: ..., en: ...} in the data by its text in `lang`.
+
+    A pair is a mapping with exactly the keys `de` and `en`. If the wanted language is empty,
+    the other one is used, so a document never shows an empty cell for a half-translated text.
+    """
+    if isinstance(value, dict):
+        if set(value) == {"de", "en"}:
+            other = "en" if lang == "de" else "de"
+            return value.get(lang) or value.get(other) or ""
+        return {k: resolve_text(v, lang) for k, v in value.items()}
+    if isinstance(value, list):
+        return [resolve_text(v, lang) for v in value]
+    return value
 
 
 def _resolve_derived(data: dict[str, Any], schema_path: Path) -> dict[str, Any]:
@@ -163,6 +183,47 @@ def _build_config_sections(
     return envs, sections
 
 
+def _relink(path: str, base_dir: Path, output_path: Path) -> str | None:
+    """A path written relative to the data file, made relative to the rendered document. None on another drive."""
+    try:
+        return os.path.relpath(base_dir / path, output_path.resolve().parent).replace("\\", "/")
+    except ValueError:
+        return None
+
+
+def relink_assets(data: dict[str, Any], base_dir: Path, output_path: Path) -> dict[str, Any]:
+    """Make the file paths in the data (the process map and the screenshots of the steps) relative to the document.
+
+    The data file holds them relative to itself, so one data file can be rendered into documents in any folder.
+    """
+    result = dict(data)
+    process_map = data.get("process_map")
+    if isinstance(process_map, dict):
+        fixed: dict[str, Any] = {}
+        for lang, entry in process_map.items():
+            entry = dict(entry)
+            for key in ("image", "source"):
+                if entry.get(key):
+                    relinked = _relink(entry[key], base_dir, output_path)
+                    if relinked:
+                        entry[key] = relinked
+                    else:
+                        entry.pop(key)
+            fixed[lang] = entry
+        result["process_map"] = fixed
+    if isinstance(data.get("process_steps"), list):
+        rows = []
+        for row in data["process_steps"]:
+            shots = [
+                {**shot, "file": rel}
+                for shot in row.get("screenshots") or []
+                if (rel := _relink(shot["file"], base_dir, output_path))
+            ]
+            rows.append({**row, "screenshots": shots})
+        result["process_steps"] = rows
+    return result
+
+
 def render(
     artefact: str,
     data: dict[str, Any],
@@ -171,7 +232,13 @@ def render(
     project_json_path: Path | None = None,
     config_paths: dict[str, Path] | None = None,
     adr_dir: Path | None = None,
+    lang: str | None = None,
+    asset_base: Path | None = None,
 ) -> None:
+    if asset_base:
+        data = relink_assets(data, asset_base.resolve(), output_path)
+    if lang:
+        data = resolve_text(data, lang)
     data = _resolve_derived(data, schema_path or DEFAULT_SCHEMA)
     if adr_dir and adr_dir.is_dir() and "adrs" not in data:
         adrs = [read_adr_file(p) for p in sorted(adr_dir.glob("*.md"))]
@@ -213,7 +280,9 @@ def render(
     ]
     env.globals["gen_id"] = _gen_id
     template_file = f"{artefact}-template.md"
+    if lang and (TEMPLATES_DIR / f"{artefact}-template.{lang}.md").exists():
+        template_file = f"{artefact}-template.{lang}.md"
     raw = (TEMPLATES_DIR / template_file).read_text(encoding="utf-8")
-    tmpl = env.from_string(_expand_regions(raw))
+    tmpl = env.from_string(_expand_regions(raw, lang))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(tmpl.render(**data), encoding="utf-8")

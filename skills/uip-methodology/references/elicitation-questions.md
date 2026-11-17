@@ -36,6 +36,10 @@
 - Walk me through the process step by step from trigger to completion.
 - For each step: what is the input, what action is taken, and what is the output?
 - Are there any decision points where a human judges or classifies something?
+- Where does the process split into branches? Can more than one branch run at once (inclusive), or exactly one (exclusive)? Where do the branches come together again?
+- Which steps can be repeated or looped back to?
+- Give each step a short name instead of a number. Numbers are added when the document is generated, so inserting a step never breaks a reference.
+- Which step or decision is still open or not verified? Tag it `open-question` in the yaml instead of writing it into the text.
 
 **Input Data**
 - Is input data digital (file/database/API) or scanned/handwritten?

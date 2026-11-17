@@ -86,10 +86,7 @@ Record all key contacts so every team member knows who to reach for business dec
 <!-- Who are the key contacts? For the PDD: process owner, business sponsor, BA, PM, Works Council rep, and DPO. For the SDD: per-system technical contacts — who to call for firewall rules, account provisioning, and system access requests. -->
 
 <!-- #region contacts_technical -->
-| Role | Name | System | Email |
-| --- | --- | --- | --- |
-| System Owner | Alice Müller | SAP ECC | alice.mueller@example.com |
-| Network / Firewall | Bob Tan | Infra | bob.tan@example.com |
+[TBD]
 <!-- #endregion contacts_technical -->
 
 ### 2.2 Technology Overview
@@ -141,21 +138,18 @@ The automation in its environment — external actors, connected systems, and th
 
 ```mermaid
 graph LR
-    Human([AP Clerk])
+    Human([TBD — actor])
     subgraph RPA [" "]
         direction TB
-        Auto[[ProcessName Automation]]
+        Auto[[TBD — automation]]
     end
-    Human -->|invoice email| Auto
-    Auto <-->|"Read + Write (MIRO, MM03)"| SAP[SAP ECC]
-    Auto <-->|"Queue / Assets Schedule"| Orc[(Orchestrator)]
+    Human -->|"TBD"| Auto
+    Auto <-->|"TBD — direction"| Ext[TBD — system]
+    Auto <-->|"Queue / Assets / Schedule"| Orc[(Orchestrator)]
 ```
 
 <!-- #region system_context -->
-| Name | Role | Direction | In Scope | Notes |
-| --- | --- | --- | --- | --- |
-| SAP ECC | Source + Target | Read + Write | Yes | |
-| UiPath Orchestrator | Platform | Read + Write | Yes | Queue management |
+[TBD]
 <!-- #endregion system_context -->
 
 ### 3.2 Process Sequence
@@ -165,60 +159,7 @@ End-to-end time-ordered flow across all containers — the SA's technical re-exp
 <!-- Describe the end-to-end sequence across containers: scheduling trigger, Dispatcher query and enqueue, Performer per-item loop, and handoff to any Aggregator or downstream system. -->
 
 <!-- #region process_sequence -->
-```mermaid
-sequenceDiagram
-    %% Participant ordering convention:
-    %% 1. actor  — humans involved in the process
-    %% 2.        — out-of-scope upstream systems (left, greyed rect)
-    %% 3.        — source system(s) read by the robot
-    %% 4. Orchestrator — always present
-    %% 5.        — Dispatcher project(s)
-    %% 6.        — Performer project(s)
-    %% 7.        — target system(s) written by the robot
-
-    actor Human as [Human role]
-    participant Upstream as [Upstream system]
-    participant Source as [Source system]
-    participant Orc as Orchestrator
-    participant Disp as [ProcessName_Dispatcher]
-    participant Perf as [ProcessName_Performer]
-    participant Target as [Target system]
-
-    rect rgb(245, 245, 245)
-        Note over Human,Source: Upstream — out of scope
-        Human->>Upstream: [upstream trigger]
-        Upstream->>Source: [case / record created]
-    end
-
-    rect rgb(210, 228, 255)
-        Note over Orc,Disp: Dispatcher — [schedule], priority [Medium-High]
-        Orc-->>Disp: scheduled trigger
-        Disp->>Source: [query — open cases / records]
-        Source-->>Disp: [item list]
-        Disp->>Orc: enqueue items (dedup by reference)
-    end
-
-    rect rgb(210, 255, 220)
-        Note over Orc,Target: Performer — [schedule, stop signal], priority [Medium]
-        Orc-->>Perf: scheduled trigger
-        loop per queue item [init → ingest → enrich → decide → execute → complete → finalize]
-            Perf->>Orc: get next item
-            Orc-->>Perf: [item reference]
-            Perf->>Source: [read full record]
-            Source-->>Perf: [case data]
-            Note over Perf: enrich + decide — [business rules]
-            alt success
-                Perf->>Target: [write outcome]
-                Target-->>Perf: confirmation
-                Perf->>Orc: Success
-            else BusinessException
-                Perf->>Orc: BusinessException
-            else SystemException
-                Perf->>Orc: SystemException
-            end
-        end
-    end
-```
+[TBD — Mermaid sequence diagram. Participant order: actor(s), out-of-scope upstream system(s), source system(s), Orchestrator, Dispatcher(s), Performer(s), target system(s). For one transaction the Performer loops through initialize → ingest → enrich → decide → execute → complete → finalize. See snippets/process_sequence.example.md.]
 <!-- #endregion process_sequence -->
 
 ### 3.3 Containers *(C4 Level 2)*
@@ -243,7 +184,7 @@ Deployable UiPath projects with framework, trigger, robot type, and queue contra
 
 Module-level inventory with stable IDs and archetypes — the C4 Level 3 view that connects architecture to effort estimation and test planning.
 
-<!-- For each pipeline stage (shell, init, ingest, enrich, decide, execute, complete, finalize), what module handles it, which application does it touch, what surface, and what exception IDs does it raise? -->
+<!-- For each pipeline stage (shell, initialize, ingest, enrich, decide, execute, complete, finalize), what module handles it, which application does it touch, what surface, and what exception IDs does it raise? -->
 
 <!-- ID format: cmp_{stage}_{application_or_purpose} — lowercase, underscore-separated. IDs must be stable; they are referenced by effort estimates, ADRs, and generated test tasks. enrich and execute may have multiple rows — add one per application or processing variant. Standard REFramework shell modules (marked ‡) have catalog-based effort; process-specific modules (marked †) require bespoke estimation. -->
 
@@ -252,7 +193,7 @@ Module-level inventory with stable IDs and archetypes — the C4 Level 3 view th
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | cmp_shell_init | shell | standard_ref_shell | InitAllApplications ‡ | Open and authenticate to all target applications before the transaction loop | [TBD] | ui | — | — | SE-01 |
 | cmp_shell_close | shell | standard_ref_shell | CloseAllApplications ‡ | Close all open applications regardless of transaction outcome | [TBD] | ui | — | — | — |
-| cmp_init_validate | init | standard_ref_shell | Validate ‡ | Verify required queue item fields are present; initialise transaction scope | — | — | TransactionItem | InitResult | BE-01 |
+| cmp_init_validate | initialize | standard_ref_shell | Validate ‡ | Verify required queue item fields are present; initialise transaction scope | — | — | TransactionItem | InitResult | BE-01 |
 | [TBD] | ingest | [TBD] | Ingest[Source] † | Read the full source record for this transaction | [TBD] | [TBD] | InitResult | RawData | SE-01 |
 | [TBD] | enrich | [TBD] | Enrich[Reference] † | Augment with reference data or lookups not in the queue item | [TBD] | [TBD] | RawData | EnrichedItem | [TBD] |
 | [TBD] | decide | rule_decide | Decide † | Apply business rules; select processing path; detect business exceptions | — | — | EnrichedItem | Decision | BE-01, BE-02 |
@@ -309,107 +250,35 @@ Document key architectural choices — context, option selected, and trade-offs 
 <!-- #region adr_inventory -->
 | ID | Title | Status | Affects |
 | --- | --- | --- | --- |
-| ADR-0001 | Use REFramework for queue-based Performer projects | Accepted | sdd, tdd |
-| ADR-0002 | Coded Config (TOML) for runtime settings | Accepted | tdd |
-
-#### ADR-0001 — Use REFramework for queue-based Performer projects
-
-**Status:** Accepted
-**Affects:** sdd, tdd
-
-**Context:** The Performer project processes Orchestrator queue transactions one at a time. A custom retry and state-management loop would replicate behaviour already provided by the standard UiPath REFramework.
-
-**Decision:** Adopt REFramework as the Performer shell. Business logic lives exclusively in Process/ workflows invoked from Process Transaction. The Init, GetTransactionData, and SetTransactionStatus states are left intact; no modifications are made to the REFramework flow.
-
-**Consequences:** Developers must understand REFramework state semantics. Non-standard retry logic is not permitted inside the Process Transaction state. Framework upgrades require re-baselining the shell from the current UiPath template.
-
-#### ADR-0002 — Coded Config (TOML) for runtime settings
-
-**Status:** Accepted
-**Affects:** tdd
-
-**Context:** Config.xlsx is fragile under source control: binary diffs are unreadable, merge conflicts cannot be resolved, and environment-specific values require a manual file overwrite at deploy time.
-
-**Decision:** Replace Config.xlsx with per-environment TOML files (Config_Dev.toml, Config_Test.toml, Config_Prod.toml) loaded by a CodedConfig activity. TOML is plain text, diff-friendly, and supports typed values natively without extra parsing.
-
-**Consequences:** Robots require .NET 8 and the CodedConfig NuGet package. All asset references migrate to TOML keys. The legacy Config.xlsx and its loading workflow are removed from the project.
+| [TBD] | [TBD] | [TBD] | [TBD] |
 <!-- #endregion adr_inventory -->
 
 ## 4. Component Design Detail
 
 Design decisions and runtime configuration for each component from section 3.3. One subsection per component — heading remains SA-editable; re-render the region below to regenerate content from the component inventory.
 
-### 4.1 `InvoicePosting_Dispatcher` *(rpa_dispatcher)*
+### 4.1 `[TBD]` *(rpa_dispatcher)*
 
 <!-- #region component_design_rpa_dispatcher -->
-Reads the AP inbox, extracts invoice metadata from each email–PDF pair, and enqueues one item per invoice. Runs at 05:45 CET so the queue is populated before the 06:00 CET Performer trigger. Deduplication happens here — the Performer never checks for duplicates.
-
-| Item | Decision | Rationale |
-| --- | --- | --- |
-| Source | AP mailbox — IMAP, folder Inbox, subject filter "Invoice" | Business confirmed all invoices arrive via this single channel |
-| Deduplication | Reference = invoice_number; skip if item already in queue | Prevents double-posting when Dispatcher reruns before Performer drains the queue |
-| On empty mailbox | Complete silently | No invoices is normal on public holidays — an alert would create noise |
-| Schedule | 05:45 CET Mon–Fri | 15 min lead time ensures queue is populated before Performer trigger |
-| Queue written | `InvoicePosting` | |
-| Config method | Orchestrator Assets / TOML | |
+[TBD]
 <!-- #endregion component_design_rpa_dispatcher -->
 
-### 4.2 `InvoicePosting_Performer` *(rpa_performer)*
+### 4.2 `[TBD]` *(rpa_performer)*
 
 <!-- #region component_design_rpa_performer -->
-One REFramework transaction = one vendor invoice. The queue item `Reference` carries the invoice number — used as the deduplication key and the correlation ID in all log messages.
-
-SAP MIRO posting is **not idempotent** — retrying a failed post risks creating a duplicate FI document. Retry count in PROD is therefore 0. DEV/TEST allows 1 retry to recover from transient test-environment instability without incurring posting risk.
-
-| Item | Decision | Rationale |
-| --- | --- | --- |
-| Retry count (PROD) | 0 | MIRO posting is not idempotent — a retry could produce a duplicate FI document |
-| Retry count (DEV/TEST) | 1 | Tolerates transient SAP TST flakiness; no production risk |
-| Max consecutive SE | 3 | Three consecutive faults indicate infrastructure failure — abort and page ops |
-| ShouldMarkJobAsFaulted | true (PROD) | Ensures Orchestrator alerts ops when the abort threshold is reached |
-| Multiple resolutions | No | SAP GUI requires 1920×1080; one standard resolution VM is sufficient at this volume |
-| Queue read | `InvoicePosting` | |
-| Config method | Orchestrator Assets / TOML | |
-
-**Queue contract (read from `InvoicePosting`):**
-
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| Reference | string | yes | Invoice number — deduplication key; must never be blank |
-| vendor_id | string | yes | SAP vendor account number |
-| invoice_date | string | yes | DD.MM.YYYY — parsed to DateTime in Init stage |
-| total_amount | string | yes | DE decimal format (1.234,56) — normalised to decimal in Init stage |
-| currency | string | yes | EUR / USD / GBP — triggers BE-01 if outside this set |
-| po_number | string | yes | Must exist in SAP MM03 — missing PO triggers BE-02 |
-| source_email_id | string | no | IMAP Message-ID retained for traceability audit; not used in processing |
+[TBD]
 <!-- #endregion component_design_rpa_performer -->
 
-### 4.3 `InvoicePosting_Aggregator` *(rpa_aggregator)* *(optional — remove if not applicable)*
+### 4.3 `[TBD]` *(rpa_aggregator)* *(optional — remove if not applicable)*
 
 <!-- #region component_design_rpa_aggregator -->
-Generates a daily posting summary after all Performer transactions complete. Triggered by a scheduled job 30 minutes after the Performer stop-signal, giving the last transactions time to close.
-
-| Item | Decision | Rationale |
-| --- | --- | --- |
-| Trigger | Scheduled — 08:30 CET Mon–Fri | 30 min after Performer stop signal; allows last transactions to settle |
-| Input | Orchestrator queue `InvoicePosting` — Succeeded and Failed items from today's run | |
-| Output | XLSX report emailed to AP team distribution list | Format requested by business; no dashboard tooling available yet |
-| Config method | Orchestrator Assets / TOML | |
+[TBD]
 <!-- #endregion component_design_rpa_aggregator -->
 
-### 4.4 `SAPPosting.Library` *(rpa_library)* *(optional — add one subsection per library; remove if none)*
+### 4.4 `[TBD]` *(rpa_library)* *(optional — add one subsection per library; remove if none)*
 
 <!-- #region component_design_rpa_library -->
-Provides reusable SAP GUI automation workflows for the Invoice Posting solution — consumed by `InvoicePosting_Performer`. Packaged as a NuGet library so the posting logic can be tested and versioned independently from the Performer's REFramework shell.
-
-| Item | Decision | Rationale |
-| --- | --- | --- |
-| NuGet package ID | `DHL.RPA.AP.SAPPosting` | Follows DHL team namespace convention |
-| Exported workflows | `PostInvoice(vendor_id: string, amount: decimal, gl_account: string) → posted: boolean, doc_number: string` | Single entry point; all SAP navigation encapsulated inside |
-| Consumers | `InvoicePosting_Performer` | Dispatcher has no SAP interaction; library is Performer-only |
-| Framework | XAML (UI Automation activities) | SAP GUI requires XAML for selector-based navigation |
-| Config passing | Arguments only — no Orchestrator Assets | Performer retrieves config from Assets/TOML and passes it as arguments |
-| Versioning strategy | SemVer — breaking argument changes bump major version | Prevents silent breakage when Performer is upgraded separately |
+[TBD]
 <!-- #endregion component_design_rpa_library -->
 
 ## 5. Integration Specification
@@ -476,12 +345,7 @@ Identify every access gate — approvals, accounts, firewall rules — that must
 <!-- For each system the robot connects to, what must be arranged before the robot can run — system owner approval, account provisioning, firewall rules, static IP whitelisting, and any other access gating steps? Who owns each action and by when? -->
 
 <!-- #region system_prerequisites -->
-| System | Prerequisite | Detail | Owner | Status | Gate |
-| --- | --- | --- | --- | --- | --- |
-| SAP ECC | System owner approval | Business owner must approve robot access | TBD | Open | Pre-Dev |
-| SAP ECC | Account provisioning | Dedicated automation account (not personal dev account) | IT Infrastructure | Open | Pre-Dev |
-| SAP ECC | Firewall / IP whitelist | Static IP of robot VM must be whitelisted | Network | Open | Pre-Dev |
-| SAP ECC | User permissions | Minimum required roles / T-codes | SAP admin | Open | Pre-Dev |
+[TBD]
 <!-- #endregion system_prerequisites -->
 
 ### 8.2 Access Control
@@ -504,10 +368,7 @@ Ensure every system authentication is documented with auth method, asset type, a
 <!-- Asset type: use Credential for username + password pairs; use Text for tokens, API keys, private keys, and URLs. Wrong type is a defect. -->
 
 <!-- #region system_credentials -->
-| System | Environment | Auth Method | Credential Asset | Asset Type | Rotation | Status |
-| --- | --- | --- | --- | --- | --- | --- |
-| SAP ECC | Test | Windows SSO | PPO_SAP_Test_Credentials | Credential | Quarterly | Open |
-| SAP ECC | Production | Windows SSO | PPO_SAP_Prod_Credentials | Credential | Quarterly | Open |
+[TBD]
 <!-- #endregion system_credentials -->
 
 ### 8.4 Data Protection and Compliance

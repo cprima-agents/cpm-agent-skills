@@ -14,7 +14,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | cmp_shell_init | shell | standard_ref_shell | InitAllApplications ‡ | Open and authenticate to all target applications before the transaction loop | [TBD] | ui | — | — | SE-01 |
 | cmp_shell_close | shell | standard_ref_shell | CloseAllApplications ‡ | Close all open applications regardless of transaction outcome | [TBD] | ui | — | — | — |
-| cmp_init_validate | init | standard_ref_shell | Validate ‡ | Verify required queue item fields are present; initialise transaction scope | — | — | TransactionItem | InitResult | BE-01 |
+| cmp_init_validate | initialize | standard_ref_shell | Validate ‡ | Verify required queue item fields are present; initialise transaction scope | — | — | TransactionItem | InitResult | BE-01 |
 | [TBD] | ingest | [TBD] | Ingest[Source] † | Read the full source record for this transaction | [TBD] | [TBD] | InitResult | RawData | SE-01 |
 | [TBD] | enrich | [TBD] | Enrich[Reference] † | Augment with reference data or lookups not in the queue item | [TBD] | [TBD] | RawData | EnrichedItem | [TBD] |
 | [TBD] | decide | rule_decide | Decide † | Apply business rules; select processing path; detect business exceptions | — | — | EnrichedItem | Decision | BE-01, BE-02 |

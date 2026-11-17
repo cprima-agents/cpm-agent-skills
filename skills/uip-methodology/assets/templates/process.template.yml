@@ -1,16 +1,68 @@
 version: "0.1"
 
+# Text = text a person reads. Always a pair, both keys required:
+#   { de: string, en: string }
+# A plain string in a Text field is a linter error (scripts/lint_yaml_text.py).
+# Identifiers, refs, enums and names are never pairs.
+#
+# Status = New | InProgress | UnderReview | Approved | Rejected | Complete
+#   New          item captured, not yet being worked on
+#   InProgress   item is being analyzed, specified, or revised
+#   UnderReview  item is awaiting or undergoing review
+#   Approved     item has been formally accepted
+#   Rejected     item has been formally declined
+#   Complete     required work is finished
+# A status is a single tag on an item. It is optional; when present, the linter accepts only these six spellings.
+#
+# Tags = a list of kebab-case words on an item, for example [enrich, point]. Optional; the key may be missing.
+#   Reserved tag: open-question
+#     The item is an open question. It counts as open while its status is New, InProgress, UnderReview or missing.
+#     Once the status is Approved, Rejected or Complete, the question is answered and no longer listed.
+
+#
+# Models = as-is | to-be
+#   The two process models of the requirements lifecycle. The as-is model describes what exists; the to-be
+#   model specifies what shall exist. They are not states of the process and not phases of the work: they are
+#   the artefacts. One yaml file holds both. An item (step, edge, exception, terminal state) says which model
+#   it belongs to with `models: [as-is]`, `[to-be]` or `[as-is, to-be]`. A missing `models` = both.
+#   A step that sits in different places in the two models is two steps, each with its own `models`.
+#   Each model is checked as a graph of its own.
+#
+# Diagram = a rendering of one or both models at a level of detail (see DIAGRAMS). It is defined once under
+#   `diagrams`; a step may restrict itself to some diagrams with `diagrams: [ID, ...]`. No tool-specific shape
+#   id (drawio_id and the like) belongs in this file.
+
 process: string               # required; kebab-case process identifier (e.g. e-rechnung-onboarding)
-description: string           # required; one-paragraph summary of scope, variants, and outcome
+description: Text             # required; one-paragraph summary of scope, variants, and outcome
+
+# ─────────────────────────────────────────────
+# VOLUME  — how much work arrives (optional; the PDD volume table is built from it)
+# ─────────────────────────────────────────────
+volume:
+  unit: Text                  # what is counted, e.g. { de: "Fälle", en: "cases" }
+  daily: { min: integer, max: integer }   # per working day; min <= max
+
+# ─────────────────────────────────────────────
+# DIAGRAMS  — which diagrams exist: the models they show and their level of detail
+# ─────────────────────────────────────────────
+diagrams:
+  - id: string                # required; SCREAMING_SNAKE, e.g. HIGH_LEVEL_AS_IS. Its canonical name is the id in lower kebab-case
+                              #   (high-level-as-is): no language, no `.generated`, no extension. Documents refer to the diagram by it.
+    title: Text               # required
+    models: [string]          # required; as-is | to-be. Both = a comparison diagram.
+    detail: string            # required; high-level (top-level steps only) | detailed (top level and sub-steps)
+    expand: [string]          # optional; ids of tasks with sub-steps that this diagram shows opened inline, in their lane,
+                              #   as BPMN draws an expanded sub-process, instead of as one box (high-level) or a container
+    # Steps with a `lane` are drawn in a BPMN pool with one swimlane per lane. A sub-step takes the lane of its activity.
 
 # ─────────────────────────────────────────────
 # LANES  — swim-lane actors in the process diagram
 # ─────────────────────────────────────────────
 lanes:
   - id: string                # required; SCREAMING_SNAKE e.g. LANE_RPA
-    label: string             # required; display name
+    label: string             # required; display name (a system or actor name, not a pair)
     parent: string            # optional; id of enclosing lane (for nested lanes)
-    note: string              # optional; e.g. "dashed — automated processing"
+    note: Text                # optional; e.g. "dashed — automated processing"
 
 # ─────────────────────────────────────────────
 # STEPS  — tasks, gateways, and events
@@ -18,16 +70,30 @@ lanes:
 steps:
 
   # ── task ──────────────────────────────────────────────────────────────────
-  - id: string                # required; SCREAMING_SNAKE step id, unique in file
-    lane: string              # required; ref to lanes[].id
+  # The yaml holds no sequence numbers. The order is the edges below; a renderer derives the numbers.
+  # A step may be a task with sub-steps: the sub-steps name it in `parent`. An edge connects steps of the same level.
+  # Stage containers: in the to-be model the seven pipeline stages are top-level tasks with a `stage` and
+  # `models: [to-be]`; the steps of a stage name that container as their parent. As the as-is model has no stages,
+  # a step names its parent per model: `parent: { to-be: INGEST }` (a model left out = top level). The edges inside a
+  # container, and the edges between containers, are then tagged with `models: [to-be]`. The stage of a step inside a
+  # container is the container's, so only the container needs `stage`.
+  - id: string                # required; SCREAMING_SNAKE step id, unique in file; never renamed once referenced
+    lane: string              # optional; ref to lanes[].id (a sub-step may omit it)
+    parent: string            # optional; id of the task this step is a sub-step of. Or per model: { as-is: ID, to-be: ID }
+    stage: string             # optional; initialize | ingest | enrich | decide | execute | complete | finalize (enums.pipeline_stage in references/rpa-methodology.yaml).
+                              #   The pipeline stage of the robot run, for the to-be model. A sub-step without `stage` takes its parent's.
+    decision: string          # optional; id of a decision in decisions.yaml. On a task: the step makes the decision.
+                              #   On a gateway: the flow branches on the decision's result. The rules live in decisions.yaml.
+    models: [string]          # optional; as-is | to-be. Missing = both models. A sub-step may not belong to a model its parent does not.
+    diagrams: [string]        # optional; ids from `diagrams`. Missing = every diagram that shows this step's models at its level of detail.
     type: task                # task | gateway | start_event | end_event | event
-    drawio_id: string         # optional; shape id in the draw.io source diagram
-    label: string             # required; human-readable step name (may be German)
-    system: string            # optional; ref to systems[].name (or alias) used in this step
+    status: Status            # optional; see Status above
+    tags: [string]            # optional; see Tags above
+    label: Text              # required; human-readable step name (may be German)
+    system: string            # optional; ref to systems[].id used in this step
     sap_transaction: string   # optional; SAP T-Code executed in this step (SAP steps only)
-    next: string              # optional; default next step id (single-path tasks)
     notes:                    # optional; design annotations, open points, constraints
-      - string
+      - Text
     screenshots:              # optional; Object Repository screens relevant to this step
       - screen: string        # Name from .objects/**/.metadata
         file: string          # relative path under .screenshots/; "tbd" if not yet captured
@@ -35,40 +101,65 @@ steps:
   # ── gateway ───────────────────────────────────────────────────────────────
   - id: string
     lane: string
+    parent: string
+    stage: string
+    models: [string]
+    diagrams: [string]
     type: gateway
-    drawio_id: string
-    label: string
+    kind: exclusive|inclusive|parallel   # required; exclusive = one branch, inclusive = one or more, parallel = all
+    role: split|join                     # required; a join says which split it closes
+    closes: string                       # join only; id of the split on the same level
+    status: Status
+    tags: [string]
+    label: Text
     system: string            # optional; system performing the evaluation
     sap_transaction: string   # optional
     notes:
-      - string
-    outcomes:                 # required for gateways; list of branches
-      - condition: string     # human-readable branch condition
-        next: string          # ref to steps[].id
-        exception: string     # optional; ref to exceptions[].id raised on this branch
+      - Text
+    # The branches of a split are its outgoing edges (see EDGES). An exclusive or inclusive split needs a
+    # condition on every outgoing edge. An inclusive or parallel split needs exactly one join, and every
+    # branch must reach that join. An exclusive split needs no join: its branches may converge by plain edges.
 
   # ── start / end event ─────────────────────────────────────────────────────
   - id: string
     lane: string
+    parent: string            # events belong to the top level; a sub-step level has no start or end event
+    models: [string]
+    diagrams: [string]
     type: start_event|end_event|event
-    drawio_id: string
-    label: string
+    status: Status
+    tags: [string]
+    label: Text
     system: string
-    next: string
     notes:
-      - string
+      - Text
+
+# ─────────────────────────────────────────────
+# EDGES  — the links between steps; they point forward, from a step to the step that follows it
+# ─────────────────────────────────────────────
+# An edge joins two steps of the same level. The incoming edges of a step are derived, never written.
+# Several edges into one step make branches converge. Inserting a step changes two edges, not the others.
+# A cycle is allowed only on an edge tagged `loop`.
+edges:
+  - from: string              # required; step id
+    to: string                # required; step id
+    models: [string]          # optional; as-is | to-be. Missing = both. Both ends must belong to these models.
+    condition: Text          # required on a branch of an exclusive or inclusive split; otherwise omit
+    exception: string         # optional; ref to exceptions[].id raised on this branch
+    status: Status            # optional
+    tags: [string]            # optional; `loop` marks a backward edge
 
 # ─────────────────────────────────────────────
 # TERMINAL STATES
 # ─────────────────────────────────────────────
 terminal_states:
   - id: string                # required; SCREAMING_SNAKE e.g. END_SUCCESS
-    label: string             # required; human-readable outcome name
+    label: Text               # required; human-readable outcome name
     type: success|escalation|correction_loop
-    drawio_id: string         # optional; single draw.io shape id
-    drawio_ids:               # optional; list when multiple diagram shapes map here
-      - string
-    note: string              # optional; clarification
+    models: [string]          # optional; as-is | to-be. Missing = both.
+    status: Status            # optional
+    tags: [string]            # optional
+    note: Text               # optional; clarification
 
 # ─────────────────────────────────────────────
 # EXCEPTIONS
@@ -76,21 +167,24 @@ terminal_states:
 exceptions:
   - id: string                # required; EX_ prefix, SCREAMING_SNAKE
     type: BusinessRuleException|SystemException
-    label: string             # short English name
+    models: [string]          # optional; as-is | to-be. Missing = both. The trigger step must belong to these models.
+    status: Status            # optional
+    tags: [string]            # optional
+    label: Text               # short name
     trigger: string           # ref to steps[].id where this exception is raised
     system: string            # optional; system that surfaces the exception
-    message: string           # human-readable description (may be German)
+    message: Text             # human-readable description (may be German)
     resolution: manual_scn|error_email_to_customer|loop_to_correction|continue_to_monitor|notify_scn_and_continue|email_to_stc
-    note: string              # optional; routing clarification (e.g. "flow continues after notification")
+    note: Text                # optional; routing clarification (e.g. "flow continues after notification")
     notes:                    # optional; list form when multiple clarifications needed
-      - string
+      - Text
 
 # ─────────────────────────────────────────────
 # TEST CASES
 # ─────────────────────────────────────────────
 test_cases:
   - id: string                # required; TC_ prefix + zero-padded number e.g. TC_001
-    description: string       # required; one-line scenario summary
+    description: Text         # required; one-line scenario summary
     variant: string           # invoice variant under test (PEPPOL|ZUGFeRD|XRechnung_email|verschlüsselt_ZUGFeRD)
     order_type: string        # Neuanlage|Änderung|Beendigung
     input:                    # key-value map of driving inputs; keys are domain field names
@@ -99,13 +193,14 @@ test_cases:
       - string
     expected_exception: string  # optional; ref to exceptions[].id expected to be raised
     expected_outcome: string    # required; ref to terminal_states[].id or steps[].id
-    note: string                # optional; clarification for non-obvious routing
+    note: Text                  # optional; clarification for non-obvious routing
 
 # ─────────────────────────────────────────────
 # OPEN QUESTIONS
 # ─────────────────────────────────────────────
 open_questions:
   - id: string                # required; OQ_ prefix + zero-padded number e.g. OQ_01
+    status: Status            # optional
+    tags: [string]            # optional
     ref: string               # optional; ref to steps[].id this question belongs to
-    drawio_id: string         # optional; draw.io annotation shape id
-    text: string              # required; full question text (may be German)
+    text: Text                # required; full question text (may be German)

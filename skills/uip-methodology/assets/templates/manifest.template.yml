@@ -1,0 +1,25 @@
+version: "0.1"
+
+# The manifest of the output repository: which documents exist, and their versions.
+# It lives in the repository the documents are generated into (for example docs/manifest.yaml), not in the skill.
+# `cli.py build-data --manifest docs/manifest.yaml` reads it; the document header (version, date, status), the
+# Document History and the Document Approvals come from here. A document never shows a version this file does not hold.
+#
+# Text = text a person reads. Always a pair, both keys required: { de: string, en: string }
+# (checked by scripts/lint_yaml_text.py; the file name must start with "manifest").
+
+artefacts:
+  - id: string                  # required; an artefact id of references/rpa-methodology.yaml: pdd, sdd, tdd, ...
+    status: Text                # optional; for example { de: "Entwurf", en: "Draft" }
+    history:                    # the versions, oldest first. The last row is the current version and date.
+      - version: string         # for example "0.1"
+        date: string            # YYYY-MM-DD
+        author: string
+        role: string
+        changes: Text           # what changed in this version
+    approvals:                  # optional; who signs which version
+      - version: string
+        role: string
+        name: string
+        department: string
+        date: string            # YYYY-MM-DD; empty until signed

@@ -1,22 +1,41 @@
 version: "0.1"
 
+# Text = text a person reads. Always a pair, both keys required:
+#   { de: string, en: string }
+# A plain string in a Text field is a linter error (scripts/lint_yaml_text.py).
+# Identifiers, refs, enums and names are never pairs.
+#
+# Status = New | InProgress | UnderReview | Approved | Rejected | Complete
+# A status is a single tag on an item. It is optional; when present, the linter accepts only these six spellings.
+# Tags = a list of kebab-case words on an item. Optional. Reserved tag: open-question.
+# (Definitions of status and tags: see process.template.yml.)
+
 systems:
-  - name: string                # required; human-readable system name
+  - id: string                  # required; SCREAMING_SNAKE entity id, unique in file, never renamed once referenced (e.g. MEINSERVICE)
+    label: string               # required; display name of the system (a proper name, not a pair)
     symbol: string              # emoji; optional display hint
     alias: string               # comma-separated lookup aliases (lowercase, no quotes)
-    description: string         # one-sentence purpose from the bot's perspective
+    in_scope: boolean           # optional; true = the automation works with this system. Missing = not yet stated ([TBD] in the PDD).
+    previously_automated: boolean|not-applicable   # optional; true if an earlier project already automated it; not-applicable for a system the robot never touches
+    dev_test_access: boolean    # optional; true = the robot user account has dev/test access to this system.
+                                #   Missing or false = the PDD prerequisite "dev/test access" stays Open.
+    description: Text           # one-sentence purpose from the bot's perspective
+    status: Status              # optional
+    tags: [string]              # optional
     role: source|target|enrichment|orchestration
     interface: none|msgraph|WinGUI|rest-api|api|DHL.ITS.AppIntegration.FTP
     accesstype: tbd|public|credential-asset
-    restrictions: tbd|string
-    notes: string               # caveats, scope limits, known constraints
+    restrictions: tbd|Text      # "tbd" or the restriction as Text
+    notes: Text                 # caveats, scope limits, known constraints
     screenshots:                # optional; system-level Object Repository screens (e.g. home/login)
       - screen: string          # Name field from .objects/**/.metadata
         file: string            # relative path under .screenshots/; "tbd" if not yet captured
     rest_api_docs: string       # optional; URL to API reference (rest-api interface only)
     operations:                 # optional; discrete operations the bot performs against this system
       - id: string              # T-Code (SAP) or operation identifier (API)
-        purpose: string         # what the bot does in this operation
+        purpose: Text           # what the bot does in this operation
+        status: Status          # optional
+        tags: [string]          # optional
         stage: enrich|execute
         unit: string            # .xaml filename responsible for this operation
         endpoint: string        # optional; HTTP method + path template (rest-api only)

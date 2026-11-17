@@ -23,7 +23,6 @@
 **Context:** {{ trunc(adr.context) }}
 
 **Decision:** {{ trunc(adr.decision) }}
-{%- endif %}
 {%- endfor %}
 {%- else %}
 | Code | Title | Status | Affects |

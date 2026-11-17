@@ -259,8 +259,8 @@ def templates(
     template_region_names: set[str] = set()
     for regions in tpl_regions.values():
         template_region_names.update(regions)
-    for snippet in sorted(_SNIPPETS_DIR.glob("*.md")):
-        stem = snippet.stem
+    # `<name>.de.md` and `<name>.example.md` are variants of the snippet `<name>`; they count once, under `<name>`.
+    for stem in sorted({p.name.split(".")[0] for p in _SNIPPETS_DIR.glob("*.md")}):
         in_yaml = stem in yaml_refs
         in_templates = stem in template_region_names
         if in_yaml or in_templates:
@@ -289,6 +289,29 @@ def templates(
                 r.record(FAIL, f"arch_review section: {region}", f"snippet missing (source: {source})")
     else:
         r.record(WARN, "arch_review", "artefact not found in YAML")
+    typer.echo()
+
+    # -- 5. artefact index: tier, audience, template ---------------------------
+    typer.echo("-- 5. artefacts[] -> tier, audience and template --")
+    tiers = {e["id"] for e in s.get("enums", {}).get("tier", [])}
+    audiences = {e["id"] for e in s.get("enums", {}).get("audience", [])}
+    for a in s.get("artefacts", []):
+        aid = a["id"]
+        if a.get("tier") not in tiers:
+            r.record(FAIL, f"{aid}: tier", f"must be one of {', '.join(sorted(tiers))}")
+        else:
+            r.record(PASS, f"{aid}: tier", a["tier"])
+        unknown = [x for x in a.get("audience") or [] if x not in audiences]
+        if not a.get("audience") or unknown:
+            r.record(FAIL, f"{aid}: audience", f"needs one or more of {', '.join(sorted(audiences))}; unknown: {unknown or 'none'}")
+        else:
+            r.record(PASS, f"{aid}: audience", ", ".join(a["audience"]))
+        if not (_TEMPLATES_DIR / f"{aid.replace('_', '-')}-template.md").is_file():
+            r.record(WARN, f"{aid}: template", "no template file")
+    known = {aid.replace("_", "-") for aid in (a["id"] for a in s.get("artefacts", []))}
+    for path in sorted(_TEMPLATES_DIR.glob("*-template.md")):
+        if path.name.removesuffix("-template.md") not in known:
+            r.record(WARN, f"templates/{path.name}", "template without an artefact in the index")
     typer.echo()
 
     r.summary()

@@ -20,7 +20,7 @@
 | Dispatcher | Project responsible for reading source data and populating the Orchestrator queue |
 | Performer | REFramework project responsible for processing queue items through the pipeline |
 | Aggregator | Optional project for post-processing, reporting, or downstream handoff after the Performer |
-| Pipeline | The ordered sequence of stages inside `Process.xaml`: init → ingest → enrich → decide → execute → complete → finalize |
+| Pipeline | The ordered sequence of stages inside `Process.xaml`: initialize → ingest → enrich → decide → execute → complete → finalize |
 | AHT | Average Handling Time — average robot processing time per transaction |
 | PD | Person-day — unit of effort (1 PD = 8 working hours) |
 | SDD | Solution Design Document — architectural design, authored by the Solution Architect |

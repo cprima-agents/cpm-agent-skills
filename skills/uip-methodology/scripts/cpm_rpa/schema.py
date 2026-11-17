@@ -11,7 +11,7 @@ from typing import Any
 
 from ruamel.yaml import YAML as _YAML
 
-from cpm_rpa.config import DEFAULT_SCHEMA
+from cpm_rpa.config import DEFAULT_SCHEMA, TEMPLATES_DIR
 
 _safe = _YAML(typ="safe")
 __all__ = [
@@ -24,6 +24,7 @@ __all__ = [
     "model_fields",
     "region_artefact_map",
     "resolve_label",
+    "template_files",
 ]
 
 
@@ -145,6 +146,20 @@ def resolve_label(schema: dict, enum_name: str, id_value: str) -> str:
 def enum_labels(schema: dict, enum_name: str) -> dict[str, str]:
     """Return the id-to-label mapping for a named enum."""
     return {e["id"]: e["label"] for e in schema.get("enums", {}).get(enum_name, [])}
+
+
+def template_files(artefact_id: str) -> dict[str, Path]:
+    """The templates of an artefact by language: `<id>-template.md` is English, `<id>-template.<lang>.md` the others.
+
+    The languages of a document are never typed into the schema; they are whatever template files exist.
+    """
+    stem = f"{artefact_id.replace('_', '-')}-template"
+    found: dict[str, Path] = {}
+    if (TEMPLATES_DIR / f"{stem}.md").is_file():
+        found["en"] = TEMPLATES_DIR / f"{stem}.md"
+    for path in sorted(TEMPLATES_DIR.glob(f"{stem}.??.md")):
+        found[path.name.split(".")[-2]] = path
+    return found
 
 
 def artefact_glob(schema: dict, artefact_id: str) -> str | None:

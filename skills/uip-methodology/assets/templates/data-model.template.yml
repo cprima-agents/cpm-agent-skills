@@ -1,30 +1,66 @@
 version: "0.1"
 
-CanonicalModel:
-  - genericName: string         # required; dot-notation path e.g. Order.DataSource, Peppol.IsRegistered
-                                # Namespace conventions: Order.* | Invoice.* | Supplier.* | Applicant.*
-                                #   TechnicalContact.* | Peppol.* | Sap.* | Execution.* | Meta.*
-                                #   Process.* | (custom namespace).*
-    description: string         # required; one-sentence meaning; include German email key in parentheses for ingest fields
-    dataType: string|enum|boolean|array|string(date)
-    multiplicity: "1"|"0..1"|"0..*"
-                                # "1"    — always present; required
-                                # "0..1" — optional; may be null/empty
-                                # "0..*" — repeating; used for array fields
-    defaultValue:               # null if no default; literal value otherwise
-    validValues:                # null if unconstrained; comma-separated list or description if enum/bounded
-    authoritativeSystems: string
-                                # who sets this field:
-                                #   mailbox              — sourced verbatim from the IKF email body
-                                #   SAP ERP              — looked up from SAP at enrich stage
-                                #   PEPPOL Directory API — returned by PEPPOL Helger or EU Directory API
-                                #   automation           — computed / derived by the RPA process itself
-    provenancePolicy:           # null or "authoritative-if-present" (field trusted as-is from the source)
-    emailKey:                   # null for non-ingest fields; German key string from IKF email body e.g. "EKP"
-    transform:                  # null if no transform; e.g. "date" (ISO-8601 parse) | "phone" (normalise)
-    pipelineStage: ingest|enrich|execute|all
-                                # ingest  — parsed from email body in GetTransactionItem / Init
-                                # enrich  — populated by SAP or PEPPOL lookups in Process stage
-                                # execute — written back after SAP ZBV_OC entry creation
-                                # all     — available and updated throughout (e.g. Meta.Observations)
-    pii: boolean                # true = Personal Identifiable Information; affects log masking and retention
+# The domain data model of a process: its entities, their fields and how they relate.
+# This is the shape of `domain_model.schema.entities` in references/rpa-methodology.yaml; the schema is the single
+# definition, this file only shows it as a template. C# classes are generated from it (see `csharp_dto` there).
+#
+# Text = text a person reads. Always a pair, both keys required:
+#   { de: string, en: string }
+# A plain string in a Text field is a linter error (scripts/lint_yaml_text.py).
+# Identifiers, refs, enums and names are never pairs.
+# Values quoted from a source (a column header, a key) keep their original wording.
+#
+# Status = New | InProgress | UnderReview | Approved | Rejected | Complete   (optional; see process.template.yml)
+# Tags = a list of kebab-case words, optional. Reserved tag: open-question.
+
+entities:
+  - id: string                  # required; UPPER_SNAKE_CASE entity id, unique in file, never renamed once referenced
+    name: string                # required; the class name, e.g. ExportRow
+    description: Text           # required; one sentence
+    stage: string               # optional; pipeline stage that fills the entity: initialize | ingest | enrich | decide | execute |
+                                #   complete | finalize (enums.pipeline_stage)
+    status: Status              # optional
+    tags: [string]              # optional
+    structured: boolean         # optional; fixed fields (true) or free text / scanned (false)
+    source:                     # where the data comes from
+      application: string       #   a system id from systems.yaml, or `automation` for what the robot computes
+      input_type: string        #   digital | OCR | PDF | xlsx | csv | email | api | database | manual (enums.input_type)
+      location: Text            #   where inside the system, e.g. the sheet or the object
+      container: Text           #   the data container as the business calls it, e.g. { de: "xlsx-Anhang des Falls", en: "xlsx case attachment" };
+                                #   entities with the same container are one row of the PDD input data table (2.6)
+    target:                     # optional; where the data is written
+      application: string
+      location: string
+    fields:
+      - name: string            # required; the property name
+        type: string            # required; string | integer | number | boolean | date | datetime | enum | list | object (enums.field_type)
+        description: Text       # required; one sentence
+        required: boolean       # required
+        identifier: boolean     # optional
+        nullable: boolean       # optional
+        enum: [string]          # optional; the allowed values
+        format: string          # optional
+        example: string         # optional
+        item_type: string       # optional; the element entity of a list or object, e.g. Recipient
+        csharp_type: string     # optional; overrides the C# type derived from `type`
+        source_key: string      # optional; the key in the source: Excel column header, Salesforce column, email key
+        derived: string         # optional; formula when the field is computed from others and never stored
+        stage: string           # optional; pipeline stage that fills the field, when it differs from its entity's
+        pii: boolean            # optional; true = personal data (log masking, retention). Left out = not assessed.
+        status: Status          # optional
+        tags: [string]          # optional
+    relationships:              # optional
+      - target_entity: string   # an entity id
+        cardinality: string     # one_to_one | one_to_many | many_to_one | many_to_many (enums.cardinality)
+    conversions:                # optional
+      - from: string
+        to: string
+        rule: string
+        lossless: boolean
+    validations:                # optional
+      - field: string
+        rule: string
+        on_failure: string
+    dto_hint:                   # optional
+      class_name: string
+      namespace: string

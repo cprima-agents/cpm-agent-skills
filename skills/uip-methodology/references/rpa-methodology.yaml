@@ -21,20 +21,32 @@ meta:
   id_strategy: stable_hash    # sha256(prefix + canonical_parts)[:6]
   id_version: 1               # increment if hash inputs or prefix mapping changes
 
+# The index of the documents this skill produces.
+#   tier       core = every project needs it; extended = added when the project needs it (enums.tier)
+#   audience   who reads it, one or more of enums.audience. The PDD is for the business; the technical file is the SDD.
+#   languages  not typed here: they are the `<template>.<lang>.md` files found next to the template
+#              (see `methodology.py artefacts` and the generated references/artefact-index.md).
+# The tier and the audience of each document are a proposal until the owner of the skill confirms them.
 artefacts:
 - id: pdd
   label: PDD
   file_glob: '*pdd*.md'
   client_facing: true
   lifecycle: true
+  tier: core
+  audience: [business, approver]
 - id: sdd
   label: SDD
   file_glob: '*sdd*.md'
   client_facing: true
   lifecycle: true
+  tier: core
+  audience: [technical]
 - id: arch-review
   label: Architecture Chapter
   file_glob: '*arch*.md'
+  tier: extended
+  audience: [technical, management]
   # sections: ordered derivable regions — section numbers live in the topic artefact entry.
   # Owned regions (owns:true in topic) are SA-authored scaffold; they do not appear here.
   sections:
@@ -64,23 +76,35 @@ artefacts:
   file_glob: '*estimation*.md'
   client_facing: true
   lifecycle: true
+  tier: extended
+  audience: [management]
 - id: roi
   label: ROI Calculation
   file_glob: '*roi*.md'
+  tier: extended
+  audience: [management]
 - id: tdd
   label: TDD
   file_glob: '*tdd*.md'
+  tier: extended
+  audience: [technical]
 - id: adr
   label: ADR
   file_glob: docs/adr/adr-*.md
   lifecycle: true
   collection: true
+  tier: extended
+  audience: [technical]
 - id: glossary
   label: Glossary
   file_glob: '*glossary*.md'
+  tier: extended
+  audience: [business, technical]
 - id: project_plan
   label: Project Plan
   file_glob: '*project-plan*.md'
+  tier: extended
+  audience: [management]
 topics:
 - topic: Process name / ownership
   semantics:
@@ -315,46 +339,61 @@ topics:
     modes:
     - interview
     interview:
-      question: Walk me through every manual step in the current process from trigger to completion — systems touched, 
-        actions taken, and who performs each step.
+      question: Walk me through every manual step in the current process from trigger to completion — systems touched,
+        actions taken, and who performs each step. Say where the process splits into branches, whether more than one
+        branch can run at once, and where the branches come together again. Do not number the steps; give each a short name.
   concept:
     model:
       process_steps:
         type: list
         item:
-          id:
+          # The fields say what a step IS, never which column shows it. A field must not map to one single column:
+          # the snippet process_steps.md decides the layout (description, system, screenshots, then the next steps,
+          # rules and exceptions in one cell). The region is generated from process.yaml and is not parsed back.
+          number:
             type: string
-            required: false
-            description: Stable trace ID — auto-assigned by parser (act_xxxxxx). Manual override allowed.
-          step:
-            type: string
-          input:
-            type: string
+            description: The step number shown in the document (1, 2, 6.1), or a symbol for an event or gateway. Derived from the edges of process.yaml; never typed by hand and never quoted in free text. Refer to a step by its id.
           description:
             type: string
-          next_step:
+            description: What happens in the step (a text pair de/en).
+          where:
             type: string
             required: false
-          on_exception:
-            type: string
+            description: The system or actor that carries out the step.
+          screenshots:
+            type: list
             required: false
-          pipeline_stage:
-            type: string
+            item:
+              caption:
+                type: string
+              file:
+                type: string
+                description: Path relative to the data file; the renderer makes it relative to the document.
+          next:
+            type: list
             required: false
-            enum:
-            - init
-            - ingest
-            - enrich
-            - decide
-            - execute
-            - complete
-            - finalize
-          business_rule:
-            type: string
+            description: Where the flow goes after the step, with the branch condition where there is one. Derived from the edges of process.yaml. A join gateway is not shown; the flow lands where it leads.
+            item:
+              condition:
+                type: string
+                required: false
+              target:
+                type: string
+          rules:
+            type: list
             required: false
+            description: Business rules that apply to the step, as texts.
+          decision:
+            type: object
+            required: false
+            description: The decision made at this step — its position in the decisions chapter (index) and its question. The step only points at the decision; the rules are in the decisions chapter.
+          exceptions:
+            type: list
+            required: false
+            description: Names of the business exceptions that can occur in the step.
   transforms:
     to_markdown: scripts/cpm_rpa/renderer.py
-    from_markdown: scripts/cpm_rpa/parser.py
+    from_markdown:   # none: the region is generated from process.yaml and has merged cells; it is not parsed back
     parse_from: pdd
   artefacts:
     pdd:
@@ -362,6 +401,70 @@ topics:
       required: true
       template: snippets/process_steps.md
       validated_by:
+  role:
+    R: ba
+    A: process-owner
+    C:
+    - sa
+  validated_by:
+- topic: Decisions
+  semantics:
+    kind: decision
+  purpose:
+    statement: State every decision the process makes as a thing of its own — its question, the data it reads, its
+      rules and which of them the business has decided — so the rules can be reviewed, cited and approved
+      separately from the steps.
+  acquisition:
+    modes:
+    - interview
+    interview:
+      question: Which decisions does the process make? For each one — what is the question, which data does it read,
+        which rules apply, what happens when no rule applies, and who decides the rules?
+  concept:
+    model:
+      decisions:
+        type: list
+        item:
+          id:
+            type: string
+          question:
+            type: string
+          made_in:
+            type: list
+            required: false
+            description: The tasks that point at the decision with `decision` — the steps where it is made.
+          used_at:
+            type: list
+            required: false
+            description: The gateways that point at the decision — where the flow branches on its result.
+          reads:
+            type: list
+            required: false
+            description: The data the decision reads — fields of the data model, each with its name in the source and its container.
+          match:
+            type: string
+            required: false
+            description: How the rules apply.
+          no_match:
+            type: string
+            required: false
+            description: What happens when no rule applies.
+          notes:
+            type: list
+            required: false
+          rules:
+            type: list
+            description: One entry per rule — id, when it applies, what follows, and its status (decided or open).
+  transforms:
+    to_markdown: scripts/cpm_rpa/renderer.py
+    from_markdown:   # none: generated from decisions.yaml
+    parse_from: pdd
+  artefacts:
+    pdd:
+      owns: true
+      required: true
+      section: '4'
+      template: snippets/decisions.md
   role:
     R: ba
     A: process-owner
@@ -1630,10 +1733,10 @@ topics:
     - interview
     design:
       instruction: SA maps each process stage to buildable modules using the archetype catalog. Assign a stable 
-        cmp_{stage}_{application} ID to each. Standard REFramework shell modules (shell, init, finalize) are always 
+        cmp_{stage}_{application} ID to each. Standard REFramework shell modules (shell, initialize, finalize) are always 
         present; add one row per enrich/execute application variant.
     interview:
-      question: For each pipeline stage (shell, init, ingest, enrich, decide, execute, complete, finalize), what module 
+      question: For each pipeline stage (shell, initialize, ingest, enrich, decide, execute, complete, finalize), what module 
         handles it, which application does it touch, what surface, and what exception IDs does it raise?
   concept:
     model:
@@ -2214,12 +2317,6 @@ topics:
     from_markdown: scripts/cpm_rpa/parser.py
     parse_from: pdd
   artefacts:
-    pdd:
-      owns: true
-      required: false
-      role: discovery observations (kind=observation)
-      section: '4'
-      template: snippets/observations_discovery.md
     sdd:
       owns: true
       required: false
@@ -2413,6 +2510,21 @@ domain_model:
         structured:
           type: boolean
           required: false
+        stage:
+          type: string
+          enum: pipeline_stage
+          required: false
+          description: The pipeline stage of the robot run that fills this entity.
+        status:
+          type: string
+          required: false
+          description: Lifecycle status of the item (New, InProgress, UnderReview, Approved, Rejected, Complete).
+        tags:
+          type: list
+          item:
+            type: string
+          required: false
+          description: Kebab-case tags; `open-question` marks an open question.
         source:
           type: object
           model:
@@ -2425,6 +2537,10 @@ domain_model:
             location:
               type: string
               required: false
+            container:
+              type: string
+              required: false
+              description: The data container the entity belongs to, as the business calls it (a name, a text pair de/en). Entities with the same container form one row of the PDD input data table (section 2.6).
         target:
           type: object
           required: false
@@ -2467,6 +2583,35 @@ domain_model:
               required: false
             csharp_type:
               type: string
+              required: false
+            description:
+              type: string
+              required: false
+              description: One-sentence meaning of the field.
+            source_key:
+              type: string
+              required: false
+              description: The key in the source system (Excel column header, Salesforce column, email key).
+            derived:
+              type: string
+              required: false
+              description: Formula when the field is computed from other fields and never stored.
+            stage:
+              type: string
+              enum: pipeline_stage
+              required: false
+              description: Pipeline stage that fills this field, when it differs from the stage of its entity.
+            pii:
+              type: boolean
+              required: false
+              description: True = personal data (affects log masking and retention). Left out = not assessed.
+            status:
+              type: string
+              required: false
+            tags:
+              type: list
+              item:
+                type: string
               required: false
         relationships:
           type: list
@@ -2599,21 +2744,67 @@ enums:
     label: RPA Developer
   - id: ops
     label: Operations / Support
+  tier:
+  - id: core
+    label: Core
+    label_de: Kern
+  - id: extended
+    label: Extended
+    label_de: Erweiterung
+  audience:
+  - id: business
+    label: Business
+    label_de: Fachbereich
+    who: Process owner, the clerks who do the work, business analyst
+  - id: approver
+    label: Approver
+    label_de: Freigabe
+    who: Process owner sign-off, Works Council (Betriebsrat), data protection officer
+  - id: technical
+    label: Technical
+    label_de: Technik
+    who: Solution architect, developers, operations and security
+  - id: management
+    label: Management
+    label_de: Management
+    who: Sponsor, project manager, steering
+  # The pipeline stages of a robot run, in order (the code-guideline stages). One transaction passes through them in this order.
   pipeline_stage:
-  - id: init
-    label: Init
+  - id: initialize
+    label: Initialize
+    purpose:
+      de: "Alles bereitmachen, bevor ein Fall angefasst wird: Konfiguration laden, Zugangsdaten holen, Anwendungen öffnen und anmelden."
+      en: "Get everything ready before a case is touched: load the configuration, fetch credentials, open and log into the applications."
   - id: ingest
     label: Ingest
+    purpose:
+      de: "Den Fall und seine Daten aus den Quellen in das Domänenobjekt holen. Es wird nichts bewertet."
+      en: "Bring the case and its data from the sources into the domain object. Nothing is judged yet."
   - id: enrich
     label: Enrich
+    purpose:
+      de: "Ergänzen, was der Fall nicht enthält, durch Abfragen in anderen Systemen. Es wird nichts verändert."
+      en: "Add what the case does not contain by looking it up in other systems. Nothing is changed."
   - id: decide
     label: Decide
+    purpose:
+      de: "Aus den Daten die Maßnahmen bestimmen. Es wird in keinem System etwas verändert."
+      en: "Choose the measures from the data. Nothing is changed in any system."
   - id: execute
     label: Execute
+    purpose:
+      de: "Die entschiedenen Maßnahmen in den Zielsystemen durchführen und festhalten, was getan wurde."
+      en: "Carry out the decided measures in the target systems and record what was done."
   - id: complete
     label: Complete
+    purpose:
+      de: "Das Ergebnis in das Quellsystem zurückschreiben und den Fall dort abschließen oder an eine Person übergeben."
+      en: "Write the result back to the source system and close the case there, or hand it to a person."
   - id: finalize
     label: Finalize
+    purpose:
+      de: "Aufräumen und berichten: heruntergeladene Dateien löschen, Anwendungen schließen, den Ausgang festhalten. Läuft auch, wenn eine frühere Stufe fehlschlug."
+      en: "Clean up and report: delete the downloaded files, close the applications, record the outcome. Runs even when an earlier stage failed."
   automation_surface:
   - id: ui
     label: UI Automation
@@ -2668,22 +2859,31 @@ enums:
   input_type:
   - id: digital
     label: Natively Digital (Excel / DB export)
+    label_de: Nativ digital (Excel- / DB-Export)
   - id: OCR
     label: OCR / Scanned Image
+    label_de: OCR / gescanntes Bild
   - id: PDF
     label: PDF
+    label_de: PDF
   - id: xlsx
     label: Excel / XLSX
+    label_de: Excel / XLSX
   - id: csv
     label: CSV
+    label_de: CSV
   - id: email
     label: Email
+    label_de: E-Mail
   - id: api
     label: API / REST / SOAP
+    label_de: API / REST / SOAP
   - id: database
     label: Database (SQL)
+    label_de: Datenbank (SQL)
   - id: manual
     label: Manual / Paper
+    label_de: Manuell / Papier
   field_type:
   - id: string
     label: String
