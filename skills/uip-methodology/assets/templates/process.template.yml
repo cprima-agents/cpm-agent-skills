@@ -1,4 +1,4 @@
-version: "0.1"
+version: "0.2"                 # the data model of this kind: see references/data-model-versions.yaml
 
 # Text = text a person reads. Always a pair, both keys required:
 #   { de: string, en: string }
@@ -82,8 +82,8 @@ steps:
     parent: string            # optional; id of the task this step is a sub-step of. Or per model: { as-is: ID, to-be: ID }
     stage: string             # optional; initialize | ingest | enrich | decide | execute | complete | finalize (enums.pipeline_stage in references/rpa-methodology.yaml).
                               #   The pipeline stage of the robot run, for the to-be model. A sub-step without `stage` takes its parent's.
-    decision: string          # optional; id of a decision in decisions.yaml. On a task: the step makes the decision.
-                              #   On a gateway: the flow branches on the decision's result. The rules live in decisions.yaml.
+    ruleset: string           # optional; id of a rule set in rules.yaml. On a task: the step applies the rules.
+                              #   On a gateway: the flow branches on their result. The rules live in rules.yaml.
     models: [string]          # optional; as-is | to-be. Missing = both models. A sub-step may not belong to a model its parent does not.
     diagrams: [string]        # optional; ids from `diagrams`. Missing = every diagram that shows this step's models at its level of detail.
     type: task                # task | gateway | start_event | end_event | event

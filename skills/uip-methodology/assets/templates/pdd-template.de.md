@@ -207,15 +207,15 @@ Die Überwachungs- und Berichtsausgaben festlegen, die Fachbereich und Betrieb b
 | 1 | [TBD] | | | |
 <!-- #endregion reporting_requirements -->
 
-## 4. Entscheidungen
+## 4. Geschäftsregeln
 
-Die Entscheidungen, die der Prozess trifft, jeweils mit ihrer Frage, den Daten, die sie liest, und ihren Regeln. Eine Regel mit dem Status „Offen" ist von der Fachseite nicht entschieden. Die Schritte in den Kapiteln 2 und 3 verweisen hierher.
+Die Regeln, nach denen der Prozess arbeitet, gegliedert in Regelwerke: je Regelwerk die Frage, die es beantwortet, die Daten, die es liest, und seine Regeln. Eine Regel mit dem Status „Offen" ist von der Fachseite nicht entschieden. Die Schritte in den Kapiteln 2 und 3 verweisen hierher.
 
-<!-- Aus decisions.yaml erzeugt: ein nummerierter Abschnitt je Entscheidung. -->
+<!-- Aus rules.yaml erzeugt: ein nummerierter Abschnitt je Regelwerk. -->
 
-<!-- #region decisions -->
+<!-- #region rulesets -->
 [TBD]
-<!-- #endregion decisions -->
+<!-- #endregion rulesets -->
 
 ## 5. Weitere Dokumentation
 

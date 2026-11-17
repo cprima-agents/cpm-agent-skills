@@ -1,7 +1,7 @@
-"""Build project data from the process, systems and decisions yaml files.
+"""Build project data from the process, systems and rules yaml files.
 
 The yaml files are the source of truth for the process: steps and edges (a network), the systems,
-the decisions. This module turns them into the flat keys the document templates read
+the business rules. This module turns them into the flat keys the document templates read
 (`process_steps`, `applications`, `business_exceptions`, `observations`, ...), so a PDD can be
 rendered from them with `render pdd --lang de|en`.
 
@@ -222,11 +222,11 @@ def _scope(
     process: dict[str, Any],
     systems: dict[str, Any],
     data_model: dict[str, Any],
-    decisions: dict[str, Any] | None = None,
+    rules: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """PDD 3.3 from the property `in_scope` of the items. Nothing is guessed: an item without `in_scope` is not listed.
 
-    Any system, step, data field or rule (outcome of a decision) may say `in_scope: true|false`, with the optional
+    Any system, step, data field or rule (a row of a rule set) may say `in_scope: true|false`, with the optional
     texts `scope_reason`, `scope_impact` and `scope_path`. A system reads as "Automation in <system>"; its notes are
     the reason when it gives no `scope_reason`. A data field reads as "Data field <its name in the source>". A rule
     reads as "Rule <its id>: <its result>".
@@ -243,8 +243,8 @@ def _scope(
             shown = f.get("source_key") or f.get("name")
             name = {"de": f"Datenfeld {shown}", "en": f"Data field {shown}"}
             items.append((name, f.get("description") or "", f, None))
-    for d in (decisions or {}).get("decisions") or []:
-        for o in d.get("outcomes") or []:
+    for d in (rules or {}).get("rulesets") or []:
+        for o in d.get("rules") or []:
             result = o.get("result")
             name = _pair(lambda lang, o=o, result=result: f"{'Regel' if lang == 'de' else 'Rule'} {o.get('id', '')}: {_t(result, lang)}")
             items.append((name, "", o, None))
@@ -322,7 +322,7 @@ def _target_order(target: Any) -> tuple:
 def _process_steps(
     process: dict[str, Any],
     systems: dict[str, Any],
-    decisions: dict[str, Any] | None,
+    rules_file: dict[str, Any] | None,
     process_dir: Path | None,
     base_dir: Path,
 ) -> list[dict[str, Any]]:
@@ -336,8 +336,8 @@ def _process_steps(
     nums = number(process, "as-is")
     steps = {s["id"]: s for s in graph["steps"]}
     system_label = {s["id"]: s.get("label") or s["id"] for s in systems.get("systems") or []}
-    # decision id -> (its position in the decisions chapter, the decision)
-    decided = {d["id"]: (i, d) for i, d in enumerate((decisions or {}).get("decisions") or [], start=1)}
+    # rule set id -> (its position in the chapter of the business rules, the rule set)
+    decided = {d["id"]: (i, d) for i, d in enumerate((rules_file or {}).get("rulesets") or [], start=1)}
     exceptions = process.get("exceptions") or []
 
     def leaving(sid: str) -> list[dict[str, Any]]:
@@ -386,12 +386,12 @@ def _process_steps(
                 "where": system_label.get(s.get("system"), ""),
                 "screenshots": shots,
                 "next": sorted(following.values(), key=lambda n: _target_order(n["target"])),
-                # the decision made at this step: its position in the decisions chapter and its question
-                "decision": {
-                    "index": decided[s["decision"]][0],
-                    "question": decided[s["decision"]][1].get("question"),
+                # the rule set of this step: its position in the chapter of the business rules and its question
+                "ruleset": {
+                    "index": decided[s["ruleset"]][0],
+                    "question": decided[s["ruleset"]][1].get("question"),
                 }
-                if s.get("decision") in decided
+                if s.get("ruleset") in decided
                 else None,
                 "rules": [],
                 "exceptions": [
@@ -406,7 +406,7 @@ _STATUS = {True: {"de": "Offen", "en": "Open"}, False: {"de": "Entschieden", "en
 
 
 def _field_of(data_model: dict[str, Any], ref: str) -> dict[str, Any]:
-    """What a decision input reads: `ENTITY.Field` of the data model, as its name in the source and its container.
+    """What a rule set reads: `ENTITY.Field` of the data model, as its name in the source and its container.
 
     A reference that the data model does not know is shown as it is written.
     """
@@ -419,23 +419,23 @@ def _field_of(data_model: dict[str, Any], ref: str) -> dict[str, Any]:
     return {"name": ref, "container": ""}
 
 
-def _decisions(
-    process: dict[str, Any], decisions: dict[str, Any] | None, data_model: dict[str, Any]
+def _rulesets(
+    process: dict[str, Any], rules_file: dict[str, Any] | None, data_model: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    """The decisions chapter of the PDD: one entry per decision of decisions.yaml, in the order of the file.
+    """The chapter of the business rules in the PDD: one entry per rule set of the rules file, in the order of the file.
 
-    A decision is a thing of its own, not a part of a step. A step points at it with `decision: <id>`: a task makes
-    the decision, a gateway branches on its result. The entry holds the question, those steps, the data the decision
+    A rule set is a thing of its own, not a part of a step. A step points at it with `ruleset: <id>`: a task applies
+    the rules, a gateway branches on their result. The entry holds the question, those steps, the data the rule set
     reads (fields of the data model), how its rules match, what happens when none matches, and its rules. A rule says
     when it applies, what follows, and whether the business has decided it. A rule without a measure is open.
     """
-    actions = (decisions or {}).get("actions") or {}
+    actions = (rules_file or {}).get("actions") or {}
     steps = process.get("steps") or []
     out = []
-    for d in (decisions or {}).get("decisions") or []:
+    for d in (rules_file or {}).get("rulesets") or []:
         d_open = _is_open_question(d)
         rules = []
-        for o in d.get("outcomes") or []:
+        for o in d.get("rules") or []:
             codes = o.get("actions") or []
             if "reasons" in o:
                 reasons, remark = o["reasons"], o.get("remark")
@@ -458,8 +458,8 @@ def _decisions(
             {
                 "id": d["id"],
                 "question": d.get("question"),
-                "made_in": [s.get("label") for s in steps if s.get("decision") == d["id"] and s.get("type") != "gateway"],
-                "used_at": [s.get("label") for s in steps if s.get("decision") == d["id"] and s.get("type") == "gateway"],
+                "made_in": [s.get("label") for s in steps if s.get("ruleset") == d["id"] and s.get("type") != "gateway"],
+                "used_at": [s.get("label") for s in steps if s.get("ruleset") == d["id"] and s.get("type") == "gateway"],
                 "reads": [_field_of(data_model, i["field"]) for i in d.get("inputs") or [] if i.get("field")],
                 "match": d.get("match") or "",
                 "no_match": d.get("no_match") or "",
@@ -473,7 +473,7 @@ def _decisions(
 def build_project_data(
     process: dict[str, Any],
     systems: dict[str, Any],
-    decisions: dict[str, Any] | None = None,
+    rules: dict[str, Any] | None = None,
     diagrams_dir: Path | None = None,
     base_dir: Path = Path("."),
     data_model: dict[str, Any] | None = None,
@@ -507,7 +507,7 @@ def build_project_data(
     overview = _overview(diagrams_dir, base_dir)
     if overview:
         data["overview"] = overview
-    in_scope, out_of_scope = _scope(process, systems, data_model or {}, decisions)
+    in_scope, out_of_scope = _scope(process, systems, data_model or {}, rules)
     if in_scope:
         data["in_scope"] = in_scope
     if out_of_scope:
@@ -581,9 +581,9 @@ def build_project_data(
         if "to-be" in models_of(x)
     ]
 
-    data["process_steps"] = _process_steps(process, systems, decisions, process_dir, base_dir)
-    data["decisions"] = _decisions(process, decisions, data_model or {})
-    data["executive_summary"] = _summary(process, systems, decisions, data)
+    data["process_steps"] = _process_steps(process, systems, rules, process_dir, base_dir)
+    data["rulesets"] = _rulesets(process, rules, data_model or {})
+    data["executive_summary"] = _summary(process, systems, rules, data)
 
     # business exceptions, from the exceptions of process.yaml
     be = []
@@ -626,20 +626,20 @@ def build_project_data(
 
 
 def _summary(
-    process: dict[str, Any], systems: dict[str, Any], decisions: dict[str, Any] | None, data: dict[str, Any]
+    process: dict[str, Any], systems: dict[str, Any], rules: dict[str, Any] | None, data: dict[str, Any]
 ) -> dict[str, Any]:
     """The summary page before chapter 1 of the PDD, from what the other fields already hold.
 
     Nothing new is asked of the yaml files: the purpose is the short description, the trigger is the as-is start
     event, the volume is the daily volume, the systems are the systems of systems.yaml (the platform left out), and
-    the results are the measures of decisions.yaml and the end states of process.yaml. Content that chapters 1 to 4
+    the results are the measures of rules.yaml and the end states of process.yaml. Content that chapters 1 to 4
     also hold is repeated here on purpose: a reader gets the process in one page before the detail.
     """
     start = next(
         (s for s in process.get("steps") or [] if s.get("type") == "start_event" and "as-is" in models_of(s)), None
     )
     results: list[Any] = []
-    for a in ((decisions or {}).get("actions") or {}).values():
+    for a in ((rules or {}).get("actions") or {}).values():
         if a.get("business_text"):
             results.append(a["business_text"])
     for t in process.get("terminal_states") or []:

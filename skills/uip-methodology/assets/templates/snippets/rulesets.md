@@ -1,11 +1,11 @@
-{#- The decisions chapter: one numbered section per decision of decisions.yaml. A decision is a thing of its own; a step
-    only points at it (see process_steps.md). `chapter` is the number of the chapter in the PDD template. -#}
+{#- The chapter of the business rules: one numbered section per rule set of rules.yaml. A rule set is a thing of its own;
+    a step only points at it (see process_steps.md). `chapter` is the number of the chapter in the PDD template. -#}
 {%- set chapter = 4 %}
-{%- if decisions %}
-{%- for d in decisions %}
+{%- if rulesets %}
+{%- for d in rulesets %}
 ### {{ chapter }}.{{ loop.index }} {{ d.question }}
 
-{% if d.made_in %}- **Made in step:** {{ d.made_in | join("; ") }}
+{% if d.made_in %}- **Applied in step:** {{ d.made_in | join("; ") }}
 {% endif %}
 {%- if d.used_at %}- **The flow branches on it at:** {{ d.used_at | unique | join("; ") }}
 {% endif %}

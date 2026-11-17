@@ -1,11 +1,11 @@
-{#- Das Kapitel Entscheidungen: ein nummerierter Abschnitt je Entscheidung aus decisions.yaml. Eine Entscheidung ist ein
-    eigenes Ding; ein Schritt verweist nur auf sie (siehe process_steps.de.md). `chapter` ist die Kapitelnummer im PDD. -#}
+{#- Das Kapitel Geschäftsregeln: ein nummerierter Abschnitt je Regelwerk aus rules.yaml. Ein Regelwerk ist ein
+    eigenes Ding; ein Schritt verweist nur auf es (siehe process_steps.de.md). `chapter` ist die Kapitelnummer im PDD. -#}
 {%- set chapter = 4 %}
-{%- if decisions %}
-{%- for d in decisions %}
+{%- if rulesets %}
+{%- for d in rulesets %}
 ### {{ chapter }}.{{ loop.index }} {{ d.question }}
 
-{% if d.made_in %}- **Getroffen im Schritt:** {{ d.made_in | join("; ") }}
+{% if d.made_in %}- **Angewandt im Schritt:** {{ d.made_in | join("; ") }}
 {% endif %}
 {%- if d.used_at %}- **Der Ablauf verzweigt danach bei:** {{ d.used_at | unique | join("; ") }}
 {% endif %}

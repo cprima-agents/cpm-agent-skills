@@ -2,7 +2,10 @@
 # requires-python = ">=3.10"
 # dependencies = ["pyyaml>=6", "ruamel.yaml>=0.18"]
 # ///
-"""Lint process, decisions, systems and data-model yaml files.
+"""Lint the source files: process, rules, systems, data-model, manifest, stakeholders, objectives, reporting.
+
+0. The `version` of a file must be the current version of its kind (references/data-model-versions.yaml). An older
+   file fails with "run `cli.py migrate`" and is not checked any further.
 
 1. Every field marked `Text` in assets/templates/*.template.yml must be a pair
    { de: <text>, en: <text> } with both keys filled. A plain string is an error.
@@ -18,9 +21,9 @@
    shape id (`drawio_id`) is allowed in the file.
 
 Usage:
-    uv run scripts/lint_yaml_text.py docs/solution-design/process.yaml docs/solution-design/decisions.yaml
+    uv run scripts/lint_yaml_text.py docs/solution-design/process.yaml docs/solution-design/rules.yaml
 
-The kind of file is taken from its name: process*, decisions*, systems*, data-model*.
+The kind of file is taken from its name: process*, rules*, systems*, data-model*, manifest*, ...
 Exit code 1 when an error is found.
 """
 
@@ -30,6 +33,7 @@ from pathlib import Path
 
 import yaml
 
+import migrations
 from yaml_graph import STAGES, enum_ids, lint_graph
 
 # Paths of the Text fields per kind. "*" stands for every item of a list.
@@ -56,21 +60,21 @@ TEXT_PATHS: dict[str, list[str]] = {
         "test_cases.*.note",
         "open_questions.*.text",
     ],
-    "decisions": [
-        "decisions.*.question",
-        "decisions.*.match",
-        "decisions.*.no_match",
-        "decisions.*.notes.*",
+    "rules": [
+        "rulesets.*.question",
+        "rulesets.*.match",
+        "rulesets.*.no_match",
+        "rulesets.*.notes.*",
         "actions.*.business_text",
-        "decisions.*.outcomes.*.reasons.*",
-        "decisions.*.outcomes.*.remark",
-        "decisions.*.outcomes.*.result",
-        "decisions.*.outcomes.*.action",
-        "decisions.*.outcomes.*.note",
-        "decisions.*.outcomes.*.observation",
-        "decisions.*.outcomes.*.scope_reason",
-        "decisions.*.outcomes.*.scope_impact",
-        "decisions.*.outcomes.*.scope_path",
+        "rulesets.*.rules.*.reasons.*",
+        "rulesets.*.rules.*.remark",
+        "rulesets.*.rules.*.result",
+        "rulesets.*.rules.*.action",
+        "rulesets.*.rules.*.note",
+        "rulesets.*.rules.*.observation",
+        "rulesets.*.rules.*.scope_reason",
+        "rulesets.*.rules.*.scope_impact",
+        "rulesets.*.rules.*.scope_path",
     ],
     "systems": [
         "systems.*.description",
@@ -131,9 +135,9 @@ STATUS_PATHS: dict[str, list[str]] = {
         "exceptions.*",
         "open_questions.*",
     ],
-    "decisions": [
-        "decisions.*",
-        "decisions.*.outcomes.*",
+    "rules": [
+        "rulesets.*",
+        "rulesets.*.rules.*",
     ],
     "systems": [
         "systems.*",
@@ -242,8 +246,14 @@ def check_entities(data: dict) -> list[str]:
 def check(path: Path) -> list[str]:
     kind = kind_of(path)
     if kind is None:
-        return [f"{path}: cannot tell the kind from the file name (process, decisions, systems, data-model, manifest, stakeholders, objectives, reporting, exception-handling)"]
+        old = migrations.kind_of_name(path.name)
+        if old in migrations.legacy_kinds():  # a kind that was renamed
+            return [f"{path}: the kind '{old}' is now '{migrations.legacy_kinds()[old]}': run `cli.py migrate {path}`"]
+        return [f"{path}: cannot tell the kind from the file name (process, rules, systems, data-model, manifest, stakeholders, objectives, reporting, exception-handling)"]
     data = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
+    expected = migrations.current(kind)
+    if expected and str(data.get("version")) != expected:  # an old file is migrated, not read on
+        return [f"{path}: version {data.get('version')}, current {expected}: run `cli.py migrate {path}`"]
     errors: list[str] = []
     for text_path in TEXT_PATHS[kind]:
         for where, value in walk(data, text_path.split("."), ""):
@@ -350,8 +360,8 @@ def check_system_refs(paths: list[Path]) -> list[str]:
     for path, (kind, data) in loaded.items():
         if kind == "process":
             items = [("steps", s) for s in data.get("steps") or []] + [("exceptions", x) for x in data.get("exceptions") or []]
-        elif kind == "decisions":
-            items = [("decisions", d) for d in data.get("decisions") or []]
+        elif kind == "rules":
+            items = [("rulesets", d) for d in data.get("rulesets") or []]
         elif kind == "stakeholders":
             items = [("contacts_technical", c) for c in data.get("contacts_technical") or []]
         else:
@@ -363,40 +373,40 @@ def check_system_refs(paths: list[Path]) -> list[str]:
     return errors
 
 
-def check_decision_refs(paths: list[Path]) -> list[str]:
-    """The links of the decisions, checked when the files they point at are linted together.
+def check_rule_refs(paths: list[Path]) -> list[str]:
+    """The links of the rule sets, checked when the files they point at are linted together.
 
-    A step's `decision` must be a decision id of the decisions file. A decision's input `field` must be
-    `ENTITY.Field` of the data-model file. A decision that no step points at is reported, too.
+    A step's `ruleset` must be a rule set id of the rules file. An input `field` of a rule set must be
+    `ENTITY.Field` of the data-model file. A rule set that no step points at is reported, too.
     """
     loaded = {p: (kind_of(p), yaml.safe_load(p.read_text(encoding="utf-8-sig"))) for p in paths if kind_of(p)}
     by_kind = {kind: (path, data) for path, (kind, data) in loaded.items()}
     errors: list[str] = []
-    if "decisions" in by_kind and "process" in by_kind:
-        d_path, d_data = by_kind["decisions"]
+    if "rules" in by_kind and "process" in by_kind:
+        r_path, r_data = by_kind["rules"]
         p_path, p_data = by_kind["process"]
-        ids = {d.get("id") for d in d_data.get("decisions") or []}
+        ids = {d.get("id") for d in r_data.get("rulesets") or []}
         used = set()
         for s in p_data.get("steps") or []:
-            ref = s.get("decision")
+            ref = s.get("ruleset")
             if ref is None:
                 continue
             used.add(ref)
             if ref not in ids:
-                errors.append(f"{p_path}: steps {s.get('id')}: decision '{ref}' is not a decision id in the decisions file")
+                errors.append(f"{p_path}: steps {s.get('id')}: ruleset '{ref}' is not a rule set id in the rules file")
         for missing in sorted(i for i in ids - used if i):
-            errors.append(f"{d_path}: decisions {missing}: no step of the process file points at it with `decision`")
-    if "decisions" in by_kind and "data-model" in by_kind:
-        d_path, d_data = by_kind["decisions"]
+            errors.append(f"{r_path}: rulesets {missing}: no step of the process file points at it with `ruleset`")
+    if "rules" in by_kind and "data-model" in by_kind:
+        r_path, r_data = by_kind["rules"]
         _m_path, m_data = by_kind["data-model"]
         fields = {
             f"{e.get('id')}.{f.get('name')}" for e in m_data.get("entities") or [] for f in e.get("fields") or []
         }
-        for d in d_data.get("decisions") or []:
+        for d in r_data.get("rulesets") or []:
             for i in d.get("inputs") or []:
                 if i.get("field") not in fields:
                     errors.append(
-                        f"{d_path}: decisions {d.get('id')}: input '{i.get('field')}' is not ENTITY.Field of the data-model file"
+                        f"{r_path}: rulesets {d.get('id')}: input '{i.get('field')}' is not ENTITY.Field of the data-model file"
                     )
     return errors
 
@@ -409,7 +419,7 @@ def main(argv: list[str]) -> int:
     for arg in argv:
         errors.extend(check(Path(arg)))
     errors.extend(check_system_refs([Path(a) for a in argv]))
-    errors.extend(check_decision_refs([Path(a) for a in argv]))
+    errors.extend(check_rule_refs([Path(a) for a in argv]))
     for line in errors:
         print(f"[FAIL] {line}")
     print(f"{len(argv)} file(s), {len(errors)} error(s)")

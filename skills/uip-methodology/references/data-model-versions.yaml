@@ -1,0 +1,72 @@
+# The versions of the data model of the source files (process.yaml, rules.yaml, systems.yaml, ...).
+#
+# Every source file starts with `version: "<x.y>"`. That is the version of the data model it follows. The skill states
+# here the current version of every kind of file and what changed between versions. A file with an older version is
+# not read any further: `scripts/lint_yaml_text.py` reports it, and `cli.py migrate <file>` brings it up to date with
+# the migrations in `scripts/migrations/` (one module per step, chained).
+#
+# Rules for a change of the data model:
+#   - a change that renames, moves or removes a key raises the version and comes with a migration and a test;
+#   - a change that only adds an optional key does not raise the version;
+#   - a kind that is renamed keeps its history under the new name (`renamed_from`).
+
+kinds:
+  process:
+    current: "0.2"
+    history:
+      - version: "0.1"
+        note: first version
+      - version: "0.2"
+        note: the pointer of a step to its rule set is `ruleset` (was `decision`)
+
+  rules:
+    current: "0.2"
+    renamed_from: decisions
+    history:
+      - version: "0.2"
+        note: >
+          the kind is renamed from decisions to rules. A decision is a rule set (`rulesets`, was `decisions`) and
+          its rows are rules (`rules`, was `outcomes`). The business knows these as rules, and the word decision is
+          kept for the architecture decisions.
+
+  systems:
+    current: "0.1"
+    history:
+      - version: "0.1"
+        note: first version
+
+  data-model:
+    current: "0.1"
+    history:
+      - version: "0.1"
+        note: first version
+
+  manifest:
+    current: "0.1"
+    history:
+      - version: "0.1"
+        note: first version (the optional keys `release` and `footer` were added without a new version)
+
+  stakeholders:
+    current: "0.1"
+    history:
+      - version: "0.1"
+        note: first version
+
+  objectives:
+    current: "0.1"
+    history:
+      - version: "0.1"
+        note: first version
+
+  reporting:
+    current: "0.1"
+    history:
+      - version: "0.1"
+        note: first version
+
+  exception-handling:
+    current: "0.1"
+    history:
+      - version: "0.1"
+        note: first version

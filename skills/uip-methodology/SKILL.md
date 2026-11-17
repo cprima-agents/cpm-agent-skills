@@ -165,7 +165,7 @@ Work through the 5 PDD sections in order. For each section:
 1. Introduction (Purpose, Objectives, Key Contacts, Prerequisites)
 2. AS-IS Process Description (Overview, Applications, Process Map, Steps, Input Data)
 3. TO-BE Process Description (Scope, Exceptions, Reporting)
-4. Decisions (one numbered section per decision: question, data it reads, rules with their status)
+4. Business Rules (one numbered section per rule set: question, data it reads, rules with their status)
 5. Additional Documentation
 
 ### 2. Write the file
@@ -382,20 +382,26 @@ The source of truth is the yaml files, with every reader-facing text written as 
 
 - `process.yaml` — steps and edges (a network, with sub-steps), exceptions, terminal states, lanes. In the to-be model the seven pipeline stages (initialize, ingest, enrich, decide, execute, complete, finalize) are container steps (`stage:` on a top-level task); the steps of a stage name it as `parent`, per model: `parent: { to-be: INGEST }`. PDD 3.1 lists the stages from these containers.
 - `systems.yaml` — the systems and what the robot does in them
-- `decisions.yaml` — the decisions at the gateways
+- `rules.yaml` — the business rules, grouped in rule sets (a rule set answers one question; its rows are the rules). A step points at its rule set with `ruleset: <id>`.
+
+Every source file starts with `version: "<x.y>"`, the version of its data model (`references/data-model-versions.yaml` states the current versions and what changed). A file of an older version is refused by the linter and by `build-data`: bring it up to date with `cli.py migrate <file>` (`--dry-run` shows what changes; a kind that was renamed, `decisions.yaml` to `rules.yaml`, is written under the new name and the old file is left for you to remove).
 
 Steps, in this order:
 
+0. **Migrate** old files (only when the linter says "run `cli.py migrate`"):
+   ```bash
+   uv run --project .claude/skills/uip-methodology/ .claude/skills/uip-methodology/scripts/cpm_rpa/cli.py migrate docs/process.yaml --dry-run
+   ```
 1. **Lint the yaml** and fix all FAILs:
    ```bash
-   uv run .claude/skills/uip-methodology/scripts/lint_yaml_text.py docs/process.yaml docs/systems.yaml docs/decisions.yaml
+   uv run .claude/skills/uip-methodology/scripts/lint_yaml_text.py docs/process.yaml docs/systems.yaml docs/rules.yaml
    ```
 1b. **Render the diagrams** (optional, needed for the process map of the PDD): `cli.py render-diagrams --process docs/process.yaml -o docs/diagrams` writes `<diagram-id>.<lang>.generated.drawio`, `.mmd` and `.png` (or `.svg` and `.pdf` with `--format`). A pdf page is as big as its diagram, with no paper size, so a reviewer zooms in the PDF reader; `--format drawio,mermaid,png,pdf --combine diagrams` also writes `diagrams.<lang>.generated.pdf`, all diagrams in the order of the process file with one bookmark each. The png and svg are exported with the draw.io desktop app; when it is missing or the export fails, that is only a warning. Only `.generated` files are written; a copy without `.generated` is never touched.
-1c. **Decisions as Excel** (optional, for the developers): `scripts/decisions_xlsx.py --decisions docs/decisions.yaml [--process docs/process.yaml] [--data-model docs/data-model.yaml]` writes `decisions.generated.xlsx` with the sheets Rules (one row per rule: reasons, remark, measures, status, handover, exception, audit text), Decisions and Actions, German and English side by side. The file is generated: edit the yaml and run again.
+1c. **Rules as Excel** (optional, to elicit the rules from a business expert): `scripts/rules_xlsx.py --rules docs/rules.yaml [--lang de|en] [--process docs/process.yaml] [--data-model docs/data-model.yaml]` writes `rules.generated.xlsx` (into the folder `rules/` next to the yaml when it exists) in one language, with the sheets Lesehilfe (guide), Regelwerke (rule sets) and Regeln (one row per rule: reasons, remark, what happens, status) and yellow answer columns for the business. The file is generated: edit the yaml and run again.
 2. **Build the project data** from the yaml files. Add `--diagrams-dir docs/diagrams` to put the AS-IS high-level map into PDD section 2.4 (the image if it exists, else the Mermaid text, else `[TBD]`), and `--data-model docs/data-model.yaml` to fill PDD section 2.6 with the data containers (the entities of the data model grouped by `source.container`, one row per container).
    Text pairs stay pairs, step numbers are derived, nothing is typed by hand. The process steps of the PDD (section 2, AS-IS) come from the as-is model; the business exceptions (section 3, TO-BE) from the to-be model. Other keys already in the output file are kept:
    ```bash
-   uv run --project .claude/skills/uip-methodology/ .claude/skills/uip-methodology/scripts/cpm_rpa/cli.py build-data --process docs/process.yaml --systems docs/systems.yaml --decisions docs/decisions.yaml --output docs/project-data.yaml
+   uv run --project .claude/skills/uip-methodology/ .claude/skills/uip-methodology/scripts/cpm_rpa/cli.py build-data --process docs/process.yaml --systems docs/systems.yaml --rules docs/rules.yaml --output docs/project-data.yaml
    ```
 3. **Render each language** into its own file:
    ```bash
@@ -423,7 +429,7 @@ A generated document is never edited by hand. To change it, change the yaml and 
   uv run --project .claude/skills/uip-methodology/ .claude/skills/uip-methodology/scripts/lint_docs.py docs/<artefact-file>.md
   ```
   Exit code 1 means failures remain — fix them and re-run. List remaining WARNs to the user (TBD count, SME review items, etc.).
-- **Yaml data files (`process`, `decisions`, `systems`, `data-model`) follow two rules; run the yaml linter after writing or amending one and fix all FAILs:**
+- **Yaml data files (`process`, `rules`, `systems`, `data-model`) follow two rules; run the yaml linter after writing or amending one and fix all FAILs:**
   ```bash
   uv run .claude/skills/uip-methodology/scripts/lint_yaml_text.py docs/<file>.yaml
   ```
@@ -437,9 +443,9 @@ A generated document is never edited by hand. To change it, change the yaml and 
     - **Models and diagrams.** `as-is` and `to-be` are the two process models of the requirements lifecycle: the as-is model describes what exists, the to-be model specifies what shall exist. They are not states and not phases; do not call them that. One process file holds both. An item (step, edge, exception, terminal state) says which with `models: [as-is]`, `[to-be]` or `[as-is, to-be]`; a missing `models` means both. A step that sits in different places in the two models is two steps. Each model is linted as a graph of its own.
     - A **diagram** renders one or both models (both = a comparison) at a level of detail, `high-level` (top-level steps) or `detailed` (with sub-steps). Diagrams are defined once under `diagrams` (`id`, `title`, `models`, `detail`); a step may limit itself to some diagrams with `diagrams: [ID]`. Every diagram is linted as a graph too.
     - **Pipeline stages.** A step may carry `stage`, one of `initialize`, `ingest`, `enrich`, `decide`, `execute`, `complete`, `finalize` (defined once, as `enums.pipeline_stage` in `references/rpa-methodology.yaml`, with a German and English purpose; these are the code-guideline stages of the robot run, in this order). A sub-step without `stage` takes its parent's. Never write `init`; the stage is `initialize`.
-    - **A system is an entity with an `id`**, not a name: `systems.yaml` items have `id` (UPPER_SNAKE_CASE, unique, never renamed once referenced, e.g. `MEINSERVICE`) and `label` (the display name). A `system:` in `process.yaml`, `decisions.yaml` or `credentials.yml` refers to that id. The key `name` is a linter error.
+    - **A system is an entity with an `id`**, not a name: `systems.yaml` items have `id` (UPPER_SNAKE_CASE, unique, never renamed once referenced, e.g. `MEINSERVICE`) and `label` (the display name). A `system:` in `process.yaml`, `rules.yaml` or `credentials.yml` refers to that id. The key `name` is a linter error.
     - Never put a tool-specific shape id (`drawio_id` and the like) into a yaml file. If a drawn diagram must stay linked, keep the mapping in a separate file next to it.
-    - `decisions.yaml` has no `sequence`; its `id` is the gateway step it decides.
+    - `rules.yaml` has no `sequence`; a rule set has an id of its own and a step points at it with `ruleset`. A change of the data model that renames, moves or removes a key raises the version in `references/data-model-versions.yaml` and comes with a migration and a test.
 - **Preserve all `<!-- #region name -->` / `<!-- #endregion name -->` markers** from the template verbatim. These are load-bearing: the parser (`cpm_rpa/parser.py`) uses them to extract structured data for rendering. Write the captured content *between* the tags, never outside or instead of them. A region with no data gets `[TBD]` between its tags — never an empty or missing block. Never strip, rename, or reorder region markers.
 - **Generate Mermaid diagrams from a `code-structure.yml`** using the `mermaid` CLI subcommand:
   ```bash

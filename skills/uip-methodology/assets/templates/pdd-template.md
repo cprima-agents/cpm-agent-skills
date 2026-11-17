@@ -265,15 +265,15 @@ Define the monitoring and reporting outputs the business and operations teams ne
 | 4 | [TBD] | | | |
 <!-- #endregion reporting_requirements -->
 
-## 4. Decisions
+## 4. Business Rules
 
-The decisions the process makes, each with its question, the data it reads and its rules. A rule with the status "Open" has not been decided by the business. The steps in chapters 2 and 3 point here.
+The rules the process works by, grouped in rule sets: for each rule set the question it answers, the data it reads and its rules. A rule with the status "Open" has not been decided by the business. The steps in chapters 2 and 3 point here.
 
-<!-- Generated from decisions.yaml: one numbered section per decision. -->
+<!-- Generated from rules.yaml: one numbered section per rule set. -->
 
-<!-- #region decisions -->
+<!-- #region rulesets -->
 [TBD]
-<!-- #endregion decisions -->
+<!-- #endregion rulesets -->
 
 ## 5. Additional Documentation
 

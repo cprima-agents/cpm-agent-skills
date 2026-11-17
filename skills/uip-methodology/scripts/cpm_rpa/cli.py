@@ -87,6 +87,47 @@ def render(
 
 
 # ---------------------------------------------------------------------------
+# migrate
+# ---------------------------------------------------------------------------
+
+
+@app.command("migrate")
+def migrate_command(
+    file: Path = typer.Argument(..., help="a source file: process, rules, systems, data-model, manifest, ..."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="only show what would change; write nothing"),
+) -> None:
+    """Bring a source file to the current version of the data model (references/data-model-versions.yaml).
+
+    The steps are chained: a file of version 0.1 goes to 0.2, 0.3, ... until it is current. A file whose kind was
+    renamed (decisions -> rules) is written under the new name next to the old one; the old file is never deleted, you
+    remove it yourself (`git mv` keeps the history). A file that is current is left as it is.
+    """
+    import migrations as _migrations
+
+    kind = _migrations.kind_of_name(file.name)
+    if kind is None:
+        typer.echo(f"ERROR: cannot tell the kind of {file.name} from its name.", err=True)
+        raise typer.Exit(1)
+    text = file.read_text(encoding="utf-8")
+    try:
+        new_kind, new_text, notes = _migrations.migrate_text(kind, text)  # the text is rewritten, so the formatting stays
+    except _migrations.MigrationError as error:
+        typer.echo(f"ERROR: {error}", err=True)
+        raise typer.Exit(1) from error
+    if not notes:
+        typer.echo(f"{file}: already current.")
+        return
+    target = file.with_name(file.name.replace(kind, new_kind, 1)) if new_kind != kind else file
+    for note in notes:
+        typer.echo(f"  {note}")
+    if dry_run:
+        typer.echo(f"Dry run: {target} would be written.")
+        return
+    target.write_text(new_text, encoding="utf-8", newline="\n")
+    typer.echo(f"Written: {target}" + (f"  (the old file {file.name} is left for you to remove)" if target != file else ""))
+
+
+# ---------------------------------------------------------------------------
 # docx
 # ---------------------------------------------------------------------------
 
@@ -188,7 +229,7 @@ def render_diagrams(
 def build_data(
     process: Path = typer.Option(..., "--process", help="process.yaml"),
     systems: Path = typer.Option(..., "--systems", help="systems.yaml"),
-    decisions: Path | None = typer.Option(None, "--decisions", help="decisions.yaml"),
+    rules: Path | None = typer.Option(None, "--rules", help="rules.yaml: the rule sets (PDD chapter 4)"),
     diagrams_dir: Path | None = typer.Option(
         None, "--diagrams-dir", help="folder of the .generated diagrams; puts the AS-IS high-level map into the PDD"
     ),
@@ -212,21 +253,32 @@ def build_data(
     ),
     output: Path = typer.Option(DEFAULT_DATA, "--output", "-o", help="project-data.yaml to create or update"),
 ) -> None:
-    """Fill `project-data.yaml` from the process, systems and decisions yaml files.
+    """Fill `project-data.yaml` from the process, systems and rules yaml files.
 
     Only the fields these files can supply are written: process name, short description,
     applications, process steps with derived numbers, business exceptions and the open
     questions. Other keys already in the output file are kept. Text pairs stay pairs;
-    `render --lang` picks the language.
+    `render --lang` picks the language. A source file of an older version of the data model is refused:
+    run `cli.py migrate <file>` first.
     """
+    import migrations as _migrations
     from cpm_rpa import from_yaml as _from_yaml
 
     yaml = _YAML(typ="safe")
-    load = lambda p: yaml.load(p.read_text(encoding="utf-8")) or {}  # noqa: E731
+
+    def load(p: Path) -> dict:
+        data = yaml.load(p.read_text(encoding="utf-8")) or {}
+        kind = _migrations.kind_of_name(p.name)
+        expected = _migrations.current(kind) if kind else None
+        if kind and str(data.get("version")) != str(expected):
+            typer.echo(f"ERROR: {p}: version {data.get('version')}, current {expected}: run `cli.py migrate {p}`.", err=True)
+            raise typer.Exit(1)
+        return data
+
     derived = _from_yaml.build_project_data(
         load(process),
         load(systems),
-        load(decisions) if decisions else None,
+        load(rules) if rules else None,
         diagrams_dir=diagrams_dir.resolve() if diagrams_dir else None,
         base_dir=output.resolve().parent,
         data_model=load(data_model) if data_model else None,
@@ -247,6 +299,7 @@ def build_data(
         "reporting_requirements",
         "default_be_handling",
         "default_se_handling",
+        "decisions",  # the old key of the rule sets: a data file of an earlier version still holds it
     ):
         if key not in derived:
             existing.pop(key, None)  # nothing found this time: never keep a stale value

@@ -1,7 +1,7 @@
 # RPA Methodology — artefacts, topics, and data model
 #
 # Topic axes:
-#   semantics.kind              = intent | concept | artefact | role | constraint | decision | metric | procedure | gate
+#   semantics.kind              = intent | concept | artefact | role | constraint | decision | rule | metric | procedure | gate
 #   purpose.statement           = intent expressed in rendered documents
 #   purpose.review              = LLM review rubric with quality tiers (optional)
 #   acquisition.modes           = list of acquisition modes (e.g. interview)
@@ -390,10 +390,10 @@ topics:
             type: list
             required: false
             description: Business rules that apply to the step, as texts.
-          decision:
+          ruleset:
             type: object
             required: false
-            description: The decision made at this step — its position in the decisions chapter (index) and its question. The step only points at the decision; the rules are in the decisions chapter.
+            description: The rule set of this step — its position in the chapter of the business rules (index) and its question. The step only points at the rule set; the rules are in that chapter.
           exceptions:
             type: list
             required: false
@@ -414,22 +414,22 @@ topics:
     C:
     - sa
   validated_by:
-- topic: Decisions
+- topic: Business rules
   semantics:
-    kind: decision
+    kind: rule
   purpose:
-    statement: State every decision the process makes as a thing of its own — its question, the data it reads, its
-      rules and which of them the business has decided — so the rules can be reviewed, cited and approved
-      separately from the steps.
+    statement: State the business rules of the process, grouped in rule sets, each a thing of its own — the question it
+      answers, the data it reads, its rules and which of them the business has decided — so the rules can be reviewed,
+      cited and approved separately from the steps.
   acquisition:
     modes:
     - interview
     interview:
-      question: Which decisions does the process make? For each one — what is the question, which data does it read,
+      question: Which rules does the process work by? Per rule set — what is the question, which data does it read,
         which rules apply, what happens when no rule applies, and who decides the rules?
   concept:
     model:
-      decisions:
+      rulesets:
         type: list
         item:
           id:
@@ -439,15 +439,15 @@ topics:
           made_in:
             type: list
             required: false
-            description: The tasks that point at the decision with `decision` — the steps where it is made.
+            description: The tasks that point at the rule set with `ruleset` — the steps where it is applied.
           used_at:
             type: list
             required: false
-            description: The gateways that point at the decision — where the flow branches on its result.
+            description: The gateways that point at the rule set — where the flow branches on its result.
           reads:
             type: list
             required: false
-            description: The data the decision reads — fields of the data model, each with its name in the source and its container.
+            description: The data the rule set reads — fields of the data model, each with its name in the source and its container.
           match:
             type: string
             required: false
@@ -464,14 +464,14 @@ topics:
             description: One entry per rule — id, when it applies, what follows, and its status (decided or open).
   transforms:
     to_markdown: scripts/cpm_rpa/renderer.py
-    from_markdown:   # none: generated from decisions.yaml
+    from_markdown:   # none: generated from rules.yaml
     parse_from: pdd
   artefacts:
     pdd:
       owns: true
       required: true
       section: '4'
-      template: snippets/decisions.md
+      template: snippets/rulesets.md
   role:
     R: ba
     A: process-owner
