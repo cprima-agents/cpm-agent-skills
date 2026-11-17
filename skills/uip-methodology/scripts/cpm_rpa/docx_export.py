@@ -38,19 +38,44 @@ def footer_text(manifest: dict[str, Any], data: dict[str, Any], artefact: str, l
     return re.sub(r"\{(\w+)\}", lambda m: str(values.get(m.group(1), m.group(0))), template)
 
 
+# The look of every run of the footer, stated here and not inherited: a template without a footer style would give
+# the defaults of the document (the theme font at 12 pt), and a field would not take the look of the text before it.
+FOOTER_RPR = (
+    '<w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri" w:cs="Calibri"/>'
+    '<w:color w:val="333333"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>'
+)
+
+
+def _footer_paragraph_body(text: str, lang: str) -> str:
+    """The runs of the footer: the text, a tab, the word, and the page number as a field. Every run states its look."""
+    run = lambda inner: f"<w:r>{FOOTER_RPR}{inner}</w:r>"  # noqa: E731
+    return (
+        run(f'<w:t xml:space="preserve">{escape(text)}</w:t>')
+        + run("<w:tab/>")
+        + run(f'<w:t xml:space="preserve">{_PAGE_WORD[lang]}</w:t>')
+        + run('<w:fldChar w:fldCharType="begin"/>')
+        + run('<w:instrText xml:space="preserve"> PAGE </w:instrText>')
+        + run('<w:fldChar w:fldCharType="separate"/>')
+        + run("<w:t>1</w:t>")
+        + run('<w:fldChar w:fldCharType="end"/>')
+    )
+
+
 def patch_footer(docx: Path, text: str, lang: str) -> None:
-    """Set the footer text and the word before the page number in the footer of a Word file."""
+    """Replace the footer of a Word file: the text, the word before the page number and the page number itself.
+
+    The border and the tab stop of the paragraph stay as the template has them; the look of the runs is stated.
+    """
     tmp = docx.with_suffix(".tmp")
     with zipfile.ZipFile(docx) as source, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as target:
         for item in source.infolist():
             payload = source.read(item.filename)
             if re.fullmatch(r"word/footer\d*\.xml", item.filename):
                 xml = payload.decode("utf-8")
-                texts = re.findall(r"<w:t(?: [^>]*)?>[^<]*</w:t>", xml)
-                if texts:  # the first run is the text of the footer, the second the word before the page number
-                    xml = xml.replace(texts[0], f'<w:t xml:space="preserve">{escape(text)}</w:t>', 1)
-                    if len(texts) > 1:
-                        xml = xml.replace(texts[1], f'<w:t xml:space="preserve">{_PAGE_WORD[lang]}</w:t>', 1)
+                paragraph = re.search(r"<w:p>(<w:pPr>.*?</w:pPr>)?.*?</w:p>", xml, re.DOTALL)
+                if paragraph:
+                    props = re.sub(r"<w:pStyle [^>]*/>", "", paragraph.group(1) or "")  # the style may not exist
+                    xml = xml.replace(paragraph.group(0), f"<w:p>{props}{_footer_paragraph_body(text, lang)}</w:p>", 1)
                 payload = xml.encode("utf-8")
             target.writestr(item, payload)
     tmp.replace(docx)
