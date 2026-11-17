@@ -8,9 +8,17 @@ version: "0.1"
 # Text = text a person reads. Always a pair, both keys required: { de: string, en: string }
 # (checked by scripts/lint_yaml_text.py; the file name must start with "manifest").
 
+release:                        # optional; what `scripts/release_docs.py` publishes as a GitHub Release
+  tag_prefix: string            # the tag is <tag_prefix><version>, for example docs-v0.2
+  files:                        # globs, relative to the folder of this manifest
+    - string                    # for example requirements/*.pdf
+
 artefacts:
-  - id: string                  # required; an artefact id of references/rpa-methodology.yaml: pdd, sdd, tdd, ...
+  - id: string                 # required; an artefact id of references/rpa-methodology.yaml: pdd, sdd, tdd, ...
     status: Text                # optional; for example { de: "Entwurf", en: "Draft" }
+    footer: Text                # optional; the footer of the Word file, for example { de: "PDD · {process} · Version {version}", en: ... }.
+                                # {process}, {version}, {date} and {artefact} are filled in; the page number is added.
+                                # Read by `cli.py docx`. Without it the footer holds only the page number.
     history:                    # the versions, oldest first. The last row is the current version and date.
       - version: string         # for example "0.1"
         date: string            # YYYY-MM-DD

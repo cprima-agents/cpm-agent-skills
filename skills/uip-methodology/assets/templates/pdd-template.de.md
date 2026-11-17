@@ -2,6 +2,9 @@
 
 **Prozessname:** {{ process_name or "[TBD]" }}
 
+<!-- #region overview_image -->
+<!-- #endregion overview_image -->
+
 <!-- #region pdd_header -->
 | Position | Wert |
 | --- | --- |

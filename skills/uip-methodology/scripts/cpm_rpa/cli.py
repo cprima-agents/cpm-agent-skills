@@ -87,6 +87,37 @@ def render(
 
 
 # ---------------------------------------------------------------------------
+# docx
+# ---------------------------------------------------------------------------
+
+
+@app.command("docx")
+def docx_command(
+    markdown: Path = typer.Argument(..., help="the rendered document (markdown)"),
+    artefact: str = typer.Option(..., "--artefact", "-a", help="artefact id, for example pdd"),
+    lang: str = typer.Option(..., "--lang", "-l", help="de or en"),
+    data: Path = typer.Option(DEFAULT_DATA, "--data", "-d", help="project-data.yaml"),
+    manifest: Path = typer.Option(..., "--manifest", help="manifest.yaml; the footer text of the artefact"),
+    reference_doc: Path | None = typer.Option(None, "--reference-doc", help="Word template with the styles"),
+    output: Path | None = typer.Option(None, "--output", "-o", help="default: the markdown name with .docx"),
+) -> None:
+    """Convert a rendered document to Word: pandoc with the filters, then the footer from the manifest."""
+    from cpm_rpa import docx_export as _docx
+
+    if lang not in ("de", "en"):
+        typer.echo("ERROR: --lang must be 'de' or 'en'.", err=True)
+        raise typer.Exit(1)
+    load = lambda p: _YAML(typ="safe").load(p.read_text(encoding="utf-8")) or {}  # noqa: E731
+    target = output or markdown.with_suffix(".docx")
+    try:
+        _docx.export_docx(markdown, target, lang, artefact, load(data), load(manifest), reference_doc)
+    except RuntimeError as error:
+        typer.echo(f"ERROR: {error}", err=True)
+        raise typer.Exit(1) from error
+    typer.echo(f"Written: {target}")
+
+
+# ---------------------------------------------------------------------------
 # render-diagrams
 # ---------------------------------------------------------------------------
 
@@ -103,6 +134,10 @@ def render_diagrams(
     combine: str | None = typer.Option(
         None, "--combine", help="with the format pdf: also write all pdf files of a language as one, named <combine>.<lang>.generated"
     ),
+    systems: Path | None = typer.Option(
+        None, "--systems", help="systems.yaml; with --data-model it also writes the overview picture (needs Graphviz)"
+    ),
+    data_model: Path | None = typer.Option(None, "--data-model", help="data-model.yaml, for the overview picture"),
 ) -> None:
     """Write the diagrams of `process.yaml` as `<id>.<lang>.generated.drawio`, `.mmd`, `.png`, `.svg` and `.pdf`.
 
@@ -123,6 +158,21 @@ def render_diagrams(
     data = _YAML(typ="safe").load(process.read_text(encoding="utf-8")) or {}
     only = [x.strip() for x in diagram.split(",")] if diagram else None
     written, warnings = _diagrams.write_diagrams(data, out_dir, langs, formats, only, combine)
+    if systems and data_model:  # the big picture: robot, systems, data, handover
+        from cpm_rpa import overview as _overview
+
+        load = lambda p: _YAML(typ="safe").load(p.read_text(encoding="utf-8")) or {}  # noqa: E731
+        more, more_warnings = _overview.write_overview(data, load(systems), load(data_model), out_dir, langs)
+        written += more
+        warnings += more_warnings
+    if systems:  # the run as a sequence diagram: the robot, the systems and the clerk as lanes
+        from cpm_rpa import sequence as _sequence
+
+        more, more_warnings = _sequence.write_sequence(
+            data, _YAML(typ="safe").load(systems.read_text(encoding="utf-8")) or {}, out_dir, langs
+        )
+        written += more
+        warnings += more_warnings
     for path in written:
         typer.echo(f"Written: {path}")
     for warning in warnings:

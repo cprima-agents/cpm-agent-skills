@@ -83,6 +83,7 @@ TEXT_PATHS: dict[str, list[str]] = {
     ],
     "manifest": [
         "artefacts.*.status",
+        "artefacts.*.footer",
         "artefacts.*.history.*.changes",
     ],
     "objectives": [

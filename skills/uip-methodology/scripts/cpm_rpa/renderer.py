@@ -245,6 +245,15 @@ def relink_assets(data: dict[str, Any], base_dir: Path, output_path: Path) -> di
                         entry.pop(key)
             fixed[lang] = entry
         result["process_map"] = fixed
+    for key in ("overview",):  # a generated picture: the same relinking as the process map
+        pictures = data.get(key)
+        if isinstance(pictures, dict):
+            shown: dict[str, Any] = {}
+            for lang, entry in pictures.items():
+                relinked = _relink(entry.get("image", ""), base_dir, output_path)
+                if relinked:
+                    shown[lang] = {**entry, "image": relinked}
+            result[key] = shown
     if isinstance(data.get("process_steps"), list):
         rows = []
         for row in data["process_steps"]:

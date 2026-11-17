@@ -290,6 +290,23 @@ def _process_map(process: dict[str, Any], diagrams_dir: Path | None, base_dir: P
     return result
 
 
+def _picture(diagrams_dir: Path | None, base_dir: Path, name: str, titles: dict[str, str]) -> dict[str, Any] | None:
+    """A generated picture (`<name>.<lang>.generated.png`) per language: only when its image was exported."""
+    if not diagrams_dir:
+        return None
+    result: dict[str, Any] = {}
+    for lang in ("de", "en"):
+        image = diagrams_dir / f"{name}.{lang}.generated.png"
+        if image.is_file() and image.stat().st_size > 0 and (rel := _relative(image, base_dir)):
+            result[lang] = {"title": titles[lang], "image": rel}
+    return result or None
+
+
+def _overview(diagrams_dir: Path | None, base_dir: Path) -> dict[str, Any] | None:
+    """The teaser picture of the first page (see overview.py)."""
+    return _picture(diagrams_dir, base_dir, "overview", {"de": "Der Prozess im Überblick", "en": "The process at a glance"})
+
+
 _SYMBOL = {"gateway": "◇", "start_event": "○", "end_event": "○", "event": "○"}
 _OPEN = {"de": "Noch nicht entschieden", "en": "Not decided yet"}
 
@@ -487,6 +504,9 @@ def build_project_data(
     process_map = _process_map(process, diagrams_dir, base_dir)
     if process_map:
         data["process_map"] = process_map
+    overview = _overview(diagrams_dir, base_dir)
+    if overview:
+        data["overview"] = overview
     in_scope, out_of_scope = _scope(process, systems, data_model or {}, decisions)
     if in_scope:
         data["in_scope"] = in_scope
