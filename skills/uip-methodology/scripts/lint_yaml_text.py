@@ -81,6 +81,9 @@ TEXT_PATHS: dict[str, list[str]] = {
         "artefacts.*.status",
         "artefacts.*.history.*.changes",
     ],
+    "objectives": [
+        "objectives.*",
+    ],
     "stakeholders": [
         "contacts_business.*.notes",
         "contacts_technical.*.notes",
@@ -127,8 +130,8 @@ STATUS_PATHS: dict[str, list[str]] = {
     ],
 }
 
-# The roles of the business contacts (references/rpa-methodology.yaml, contacts_business.role).
-BUSINESS_ROLES = ("process-owner", "sponsor", "ba", "pm", "works-council", "dpo", "other")
+# The roles of the business contacts: the enum stakeholder_role of references/rpa-methodology.yaml.
+BUSINESS_ROLES = enum_ids("stakeholder_role")
 
 # Plain values that are allowed instead of a pair.
 ALLOWED_PLAIN = {"systems.*.restrictions": {"tbd"}}
@@ -223,7 +226,7 @@ def check_entities(data: dict) -> list[str]:
 def check(path: Path) -> list[str]:
     kind = kind_of(path)
     if kind is None:
-        return [f"{path}: cannot tell the kind from the file name (process, decisions, systems, data-model, manifest, stakeholders)"]
+        return [f"{path}: cannot tell the kind from the file name (process, decisions, systems, data-model, manifest, stakeholders, objectives)"]
     data = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
     errors: list[str] = []
     for text_path in TEXT_PATHS[kind]:

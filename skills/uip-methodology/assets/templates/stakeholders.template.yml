@@ -11,7 +11,8 @@ version: "0.1"
 
 contacts_business:
   - name: string                # required
-    role: process-owner         # required; process-owner | sponsor | ba | pm | works-council | dpo | other
+    role: process-owner         # required; sa | ba | pm | process-owner | sponsor | sme | works-council | dpo | developer | ops | other
+                                # (enum stakeholder_role; the table shows the German or English label of the id)
     email: string               # required
     org_unit: string            # optional
     notes: Text                 # optional
@@ -21,3 +22,4 @@ contacts_technical:
     role: string                # required; free text, for example "Firewall administrator"
     system: SYSTEM_ID           # required; a system id of systems.yaml, shown as the label of that system
     email: string               # required
+    notes: Text                 # optional; a remark or description, shown in the Notes column

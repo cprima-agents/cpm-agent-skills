@@ -146,6 +146,9 @@ def build_data(
     stakeholders: Path | None = typer.Option(
         None, "--stakeholders", help="stakeholders.yaml; the business contacts (PDD 1.2) and technical contacts (SDD 2.1)"
     ),
+    objectives: Path | None = typer.Option(
+        None, "--objectives", help="objectives.yaml; the business objectives (PDD 1.1, SDD 1.1)"
+    ),
     output: Path = typer.Option(DEFAULT_DATA, "--output", "-o", help="project-data.yaml to create or update"),
 ) -> None:
     """Fill `project-data.yaml` from the process, systems and decisions yaml files.
@@ -169,9 +172,10 @@ def build_data(
         process_dir=process.resolve().parent,
         manifest=load(manifest) if manifest else None,
         stakeholders=load(stakeholders) if stakeholders else None,
+        objectives=load(objectives) if objectives else None,
     )
     existing = load(output) if output.exists() else {}
-    for key in ("process_map", "entities", "contacts_business", "contacts_technical"):
+    for key in ("process_map", "entities", "contacts_business", "contacts_technical", "objectives"):
         if key not in derived:
             existing.pop(key, None)  # nothing found this time: never keep a stale value
     existing.update(derived)

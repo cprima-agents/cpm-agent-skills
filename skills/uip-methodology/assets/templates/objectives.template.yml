@@ -1,0 +1,12 @@
+version: "0.1"
+
+# The business objectives of the project: the measurable outcomes expected from the automation.
+# It lives in the repository the documents are generated into (for example docs/objectives.yaml), not in the skill.
+# `cli.py build-data --objectives docs/objectives.yaml` reads it. The list fills the region `objectives`
+# (PDD chapter 1.1, SDD chapter 1.1). An empty list leaves the region at [TBD].
+#
+# Text = text a person reads. Always a pair, both keys required: { de: string, en: string }
+# (checked by scripts/lint_yaml_text.py; the file name must start with "objectives").
+
+objectives:
+  - Text                        # one objective, for example { de: "...", en: "..." }

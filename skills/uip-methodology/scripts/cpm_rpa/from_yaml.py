@@ -443,6 +443,7 @@ def build_project_data(
     process_dir: Path | None = None,
     manifest: dict[str, Any] | None = None,
     stakeholders: dict[str, Any] | None = None,
+    objectives: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     # The PDD describes the as-is model in section 2 (process steps) and the to-be model in section 3
     # (business exceptions).
@@ -559,19 +560,25 @@ def build_project_data(
     data["business_exceptions"] = be
     data.update(_from_manifest(manifest or {}))
     data.update(_contacts(stakeholders or {}, systems))
+    if (objectives or {}).get("objectives"):  # region `objectives`: PDD 1.1, SDD 1.1; an empty list stays [TBD]
+        data["objectives"] = list(objectives["objectives"])
     return data
 
 
 def _contacts(stakeholders: dict[str, Any], systems: dict[str, Any]) -> dict[str, Any]:
     """The stakeholder tables of the PDD (1.2) and the SDD (2.1), from stakeholders.yaml.
 
-    `contacts_business` is copied as it is. In `contacts_technical` the `system` is a system id; the table
+    In `contacts_business` the `role` is an id of the enum stakeholder_role; the table shows its German or
+    English label. In `contacts_technical` the `system` is a system id; the table
     shows the label of that system.
     """
     labels = {s["id"]: s.get("label") or s["id"] for s in systems.get("systems") or []}
     out: dict[str, Any] = {}
     if stakeholders.get("contacts_business"):
-        out["contacts_business"] = [dict(c) for c in stakeholders["contacts_business"]]
+        roles = {
+            e["id"]: {"de": e.get("label_de") or e["label"], "en": e["label"]} for e in enum_entries("stakeholder_role")
+        }
+        out["contacts_business"] = [{**c, "role": roles.get(c.get("role"), c.get("role"))} for c in stakeholders["contacts_business"]]
     if stakeholders.get("contacts_technical"):
         out["contacts_technical"] = [
             {**c, "system": labels.get(c.get("system"), c.get("system"))} for c in stakeholders["contacts_technical"]

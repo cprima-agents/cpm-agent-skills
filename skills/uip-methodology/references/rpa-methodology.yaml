@@ -170,7 +170,7 @@ topics:
       objectives:
         type: list
         item:
-          type: string
+          type: text  # a pair { de, en }; in objectives.yaml both keys are required
   transforms:
     to_markdown: scripts/cpm_rpa/renderer.py
     from_markdown: scripts/cpm_rpa/parser.py
@@ -282,12 +282,16 @@ topics:
           role:
             type: string
             enum:
-            - process-owner
-            - sponsor
+            - sa
             - ba
             - pm
+            - process-owner
+            - sponsor
+            - sme
             - works-council
             - dpo
+            - developer
+            - ops
             - other
           email:
             type: string
@@ -308,6 +312,9 @@ topics:
             type: string
           email:
             type: string
+          notes:
+            type: string
+            required: false
   transforms:
     to_markdown: scripts/cpm_rpa/renderer.py
     from_markdown: scripts/cpm_rpa/parser.py
@@ -2728,22 +2735,37 @@ enums:
   stakeholder_role:
   - id: sa
     label: Solution Architect
+    label_de: Solution Architect
   - id: ba
     label: Business Analyst
+    label_de: Business Analyst
   - id: pm
     label: Project Manager
+    label_de: Projektleitung
   - id: process-owner
     label: Process Owner
+    label_de: Prozessverantwortung
   - id: sponsor
     label: Business Sponsor
+    label_de: Fachlicher Auftraggeber
+  - id: sme
+    label: Subject Matter Expert (SME)
+    label_de: Fachexperte (SME)
   - id: works-council
-    label: Works Council (Betriebsrat)
+    label: Works Council
+    label_de: Betriebsrat
   - id: dpo
     label: Data Protection Officer
+    label_de: Datenschutzbeauftragte
   - id: developer
     label: RPA Developer
+    label_de: RPA-Entwicklung
   - id: ops
     label: Operations / Support
+    label_de: Betrieb / Support
+  - id: other
+    label: Other
+    label_de: Sonstige
   tier:
   - id: core
     label: Core

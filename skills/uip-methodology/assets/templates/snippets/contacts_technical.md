@@ -1,8 +1,8 @@
 {%- if contacts_technical %}
-| Role | Name | System | Email |
-| --- | --- | --- | --- |
+| Role | Name | System | Email | Notes |
+| --- | --- | --- | --- | --- |
 {%- for c in contacts_technical %}
-| {{ c.role }} | {{ c.name }} | {{ c.system or "" }} | {{ c.email or "" }} |
+| {{ c.role }} | {{ c.name }} | {{ c.system or "" }} | {{ c.email or "" }} | {{ c.notes or "" }} |
 {%- endfor %}
 {%- else %}
 [TBD]
