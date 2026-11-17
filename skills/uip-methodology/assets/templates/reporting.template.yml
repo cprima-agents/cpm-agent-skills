@@ -1,0 +1,16 @@
+version: "0.1"
+
+# The reporting requirements of the project: which reports are needed, how often, with which tool.
+# It lives in the repository the documents are generated into (for example docs/reporting.yaml), not in the skill.
+# `cli.py build-data --reporting docs/reporting.yaml` reads it. The list fills the region `reporting_requirements`
+# (PDD chapter 3, SDD). An empty list leaves the region at [TBD]; the skill states no default reports.
+#
+# Text = text a person reads. Always a pair, both keys required: { de: string, en: string }
+# (checked by scripts/lint_yaml_text.py; the file name must start with "reporting").
+
+reporting_requirements:
+  - report_type: Text           # required; for example { de: "Prozessprotokolle", en: "Process logs" }
+    frequency: Text             # optional; for example { de: "Täglich", en: "Daily" }
+    details: Text               # optional; what the report holds
+    tool: string                # optional; the name of the tool, for example "Orchestrator"
+    # The number of a report is its position in the list; do not write it.

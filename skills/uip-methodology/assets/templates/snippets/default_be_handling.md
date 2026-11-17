@@ -3,7 +3,5 @@
 - {{ item }}
 {%- endfor %}
 {%- else %}
-- Send email to `[TBD — exceptions@company.com]` with screenshot attached
-- Log the transaction as "Business Exception" in Orchestrator
-- Move to the next transaction
+[TBD]
 {%- endif %}

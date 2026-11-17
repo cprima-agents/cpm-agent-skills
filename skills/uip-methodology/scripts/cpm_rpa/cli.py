@@ -149,6 +149,12 @@ def build_data(
     objectives: Path | None = typer.Option(
         None, "--objectives", help="objectives.yaml; the business objectives (PDD 1.1, SDD 1.1)"
     ),
+    reporting: Path | None = typer.Option(
+        None, "--reporting", help="reporting.yaml; the reporting requirements (PDD 3.x, SDD)"
+    ),
+    exception_handling: Path | None = typer.Option(
+        None, "--exception-handling", help="exception-handling.yaml; the default handling of business exceptions (PDD 3.x)"
+    ),
     output: Path = typer.Option(DEFAULT_DATA, "--output", "-o", help="project-data.yaml to create or update"),
 ) -> None:
     """Fill `project-data.yaml` from the process, systems and decisions yaml files.
@@ -173,9 +179,19 @@ def build_data(
         manifest=load(manifest) if manifest else None,
         stakeholders=load(stakeholders) if stakeholders else None,
         objectives=load(objectives) if objectives else None,
+        reporting=load(reporting) if reporting else None,
+        exception_handling=load(exception_handling) if exception_handling else None,
     )
     existing = load(output) if output.exists() else {}
-    for key in ("process_map", "entities", "contacts_business", "contacts_technical", "objectives"):
+    for key in (
+        "process_map",
+        "entities",
+        "contacts_business",
+        "contacts_technical",
+        "objectives",
+        "reporting_requirements",
+        "default_be_handling",
+    ):
         if key not in derived:
             existing.pop(key, None)  # nothing found this time: never keep a stale value
     existing.update(derived)

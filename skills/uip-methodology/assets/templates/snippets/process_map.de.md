@@ -1,8 +1,8 @@
 {%- if process_map and process_map.image %}
 ![{{ process_map.title }}]({{ process_map.image }})
-{%- if process_map.source %}
+{%- if process_map.name %}
 
-Quelle (draw.io): [{{ process_map.name }}]({{ process_map.source }})
+Quelle: Diagramm {{ process_map.name }}
 {%- endif %}
 {%- elif process_map and process_map.mermaid %}
 ```mermaid

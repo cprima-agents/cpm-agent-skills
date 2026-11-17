@@ -67,6 +67,9 @@ TEXT_PATHS: dict[str, list[str]] = {
         "decisions.*.outcomes.*.action",
         "decisions.*.outcomes.*.note",
         "decisions.*.outcomes.*.observation",
+        "decisions.*.outcomes.*.scope_reason",
+        "decisions.*.outcomes.*.scope_impact",
+        "decisions.*.outcomes.*.scope_path",
     ],
     "systems": [
         "systems.*.description",
@@ -83,6 +86,14 @@ TEXT_PATHS: dict[str, list[str]] = {
     ],
     "objectives": [
         "objectives.*",
+    ],
+    "reporting": [
+        "reporting_requirements.*.report_type",
+        "reporting_requirements.*.frequency",
+        "reporting_requirements.*.details",
+    ],
+    "exception-handling": [
+        "default_be_handling.*",
     ],
     "stakeholders": [
         "contacts_business.*.notes",
@@ -226,7 +237,7 @@ def check_entities(data: dict) -> list[str]:
 def check(path: Path) -> list[str]:
     kind = kind_of(path)
     if kind is None:
-        return [f"{path}: cannot tell the kind from the file name (process, decisions, systems, data-model, manifest, stakeholders, objectives)"]
+        return [f"{path}: cannot tell the kind from the file name (process, decisions, systems, data-model, manifest, stakeholders, objectives, reporting, exception-handling)"]
     data = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
     errors: list[str] = []
     for text_path in TEXT_PATHS[kind]:
@@ -291,6 +302,12 @@ def check(path: Path) -> list[str]:
                     )
                 if section == "contacts_technical" and not c.get("system"):
                     errors.append(f"{path}: {section}[{i}].system: missing")
+    if kind == "reporting":
+        for i, r in enumerate(data.get("reporting_requirements") or []):
+            if not r.get("report_type"):
+                errors.append(f"{path}: reporting_requirements[{i}].report_type: missing")
+            if "no" in r:
+                errors.append(f"{path}: reporting_requirements[{i}].no: the number is the position in the list, do not state it")
     if kind == "data-model":
         errors.extend(f"{path}: {line}" for line in check_entities(data))
     if kind == "process":

@@ -973,7 +973,7 @@ topics:
       default_be_handling:
         type: list
         item:
-          type: string
+          type: text  # a pair { de, en }; the source is exception-handling.yaml; an empty list stays [TBD]
   transforms:
     to_markdown: scripts/cpm_rpa/renderer.py
     from_markdown: scripts/cpm_rpa/parser.py
@@ -1110,11 +1110,11 @@ topics:
           number:
             type: integer
           report_type:
-            type: string
+            type: text  # a pair { de, en }; the source is reporting.yaml; an empty list stays [TBD]
           frequency:
-            type: string
+            type: text
           details:
-            type: string
+            type: text
           tool:
             type: string
   transforms:

@@ -205,13 +205,17 @@ def _pipeline(process: dict[str, Any], systems: dict[str, Any], data_model: dict
 
 
 def _scope(
-    process: dict[str, Any], systems: dict[str, Any], data_model: dict[str, Any]
+    process: dict[str, Any],
+    systems: dict[str, Any],
+    data_model: dict[str, Any],
+    decisions: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """PDD 3.3 from the property `in_scope` of the items. Nothing is guessed: an item without `in_scope` is not listed.
 
-    Any system, step or data field may say `in_scope: true|false`, with the optional texts `scope_reason`,
-    `scope_impact` and `scope_path`. A system reads as "Automation in <system>"; its notes are the reason
-    when it gives no `scope_reason`. A data field reads as "Data field <its name in the source>".
+    Any system, step, data field or rule (outcome of a decision) may say `in_scope: true|false`, with the optional
+    texts `scope_reason`, `scope_impact` and `scope_path`. A system reads as "Automation in <system>"; its notes are
+    the reason when it gives no `scope_reason`. A data field reads as "Data field <its name in the source>". A rule
+    reads as "Rule <its id>: <its result>".
     """
     items: list[tuple[Any, Any, dict[str, Any], Any]] = []  # name, description, the item, fallback reason
     for s in systems.get("systems") or []:
@@ -225,6 +229,11 @@ def _scope(
             shown = f.get("source_key") or f.get("name")
             name = {"de": f"Datenfeld {shown}", "en": f"Data field {shown}"}
             items.append((name, f.get("description") or "", f, None))
+    for d in (decisions or {}).get("decisions") or []:
+        for o in d.get("outcomes") or []:
+            result = o.get("result")
+            name = _pair(lambda lang, o=o, result=result: f"{'Regel' if lang == 'de' else 'Rule'} {o.get('id', '')}: {_t(result, lang)}")
+            items.append((name, "", o, None))
     in_scope, out_of_scope = [], []
     for name, description, item, fallback in items:
         if item.get("in_scope") is True:
@@ -263,9 +272,6 @@ def _process_map(process: dict[str, Any], diagrams_dir: Path | None, base_dir: P
         mermaid = Path(f"{stem}.mmd")
         if "image" not in entry and mermaid.is_file():
             entry["mermaid"] = mermaid.read_text(encoding="utf-8").strip()
-        source = Path(f"{stem}.drawio")
-        if source.is_file() and (rel := _relative(source, base_dir)):
-            entry["source"] = rel
         result[lang] = entry
     return result
 
@@ -444,6 +450,8 @@ def build_project_data(
     manifest: dict[str, Any] | None = None,
     stakeholders: dict[str, Any] | None = None,
     objectives: dict[str, Any] | None = None,
+    reporting: dict[str, Any] | None = None,
+    exception_handling: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     # The PDD describes the as-is model in section 2 (process steps) and the to-be model in section 3
     # (business exceptions).
@@ -464,7 +472,7 @@ def build_project_data(
     process_map = _process_map(process, diagrams_dir, base_dir)
     if process_map:
         data["process_map"] = process_map
-    in_scope, out_of_scope = _scope(process, systems, data_model or {})
+    in_scope, out_of_scope = _scope(process, systems, data_model or {}, decisions)
     if in_scope:
         data["in_scope"] = in_scope
     if out_of_scope:
@@ -496,6 +504,9 @@ def build_project_data(
         for key in ("in_scope", "previously_automated", "dev_test_access"):
             if key in s:  # stated in the yaml; a missing key stays missing and renders as [TBD]
                 app[key] = s[key]
+        if s.get("in_scope") is False:  # out of scope: how to reach the system is of no interest, the cells stay blank
+            app["automation_surface"] = None
+            app["access_method"] = None
         apps.append(app)
     data["applications"] = apps
 
@@ -562,6 +573,12 @@ def build_project_data(
     data.update(_contacts(stakeholders or {}, systems))
     if (objectives or {}).get("objectives"):  # region `objectives`: PDD 1.1, SDD 1.1; an empty list stays [TBD]
         data["objectives"] = list(objectives["objectives"])
+    if (reporting or {}).get("reporting_requirements"):  # region `reporting_requirements`; the number is the position
+        data["reporting_requirements"] = [
+            {**r, "no": i} for i, r in enumerate(reporting["reporting_requirements"], start=1)
+        ]
+    if (exception_handling or {}).get("default_be_handling"):  # region `default_be_handling`
+        data["default_be_handling"] = list(exception_handling["default_be_handling"])
     return data
 
 
