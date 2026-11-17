@@ -2711,6 +2711,23 @@ lifecycle_model:
 # Inline enum: lists in concept.model fields use the ids defined here.
 # Assessment tools resolve ids to labels; unset required fields → "[TBD]".
 # -----------------------------------------------------------------------------
+table_headings:  # the two column headings of a table of facts, per region; every table has its own, in both languages
+  pdd_header:
+  - { de: Angabe, en: Item }
+  - { de: Inhalt, en: Detail }
+  sdd_header:
+  - { de: Angabe, en: Item }
+  - { de: Inhalt, en: Detail }
+  process_overview:
+  - { de: Merkmal, en: Attribute }
+  - { de: Angabe, en: Value }
+  volume:
+  - { de: Kennzahl, en: Measure }
+  - { de: Wert, en: Value }
+  executive_summary:
+  - { de: Thema, en: Topic }
+  - { de: Aussage, en: Statement }
+
 enums:
   observation_kind:
   - id: observation
@@ -2791,6 +2808,42 @@ enums:
     label_de: Management
     who: Sponsor, project manager, steering
   # The pipeline stages of a robot run, in order (the code-guideline stages). One transaction passes through them in this order.
+  interface_kind:  # how the robot talks to a system; the label is what a document shows
+  - id: none
+    label: None
+    label_de: Keine
+  - id: msgraph
+    label: Microsoft Graph
+    label_de: Microsoft Graph
+  - id: WinGUI
+    label: Windows user interface
+    label_de: Windows-Oberfläche
+  - id: rest-api
+    label: REST API
+    label_de: REST-Schnittstelle
+  - id: api
+    label: API
+    label_de: Programmierschnittstelle
+  - id: DHL.ITS.AppIntegration.FTP
+    label: File transfer (FTP)
+    label_de: Dateiübertragung (FTP)
+  access_kind:  # how the robot gets access to a system
+  - id: public
+    label: Public, no login
+    label_de: Öffentlich, ohne Anmeldung
+  - id: credential-asset
+    label: Credentials from the Orchestrator
+    label_de: Zugangsdaten aus dem Orchestrator
+  - id: password
+    label: Password
+    label_de: Passwort
+  exception_resolution:  # what the robot does when a business exception occurs
+  - id: manual_scn
+    label: A person takes over the case.
+    label_de: Eine Person übernimmt den Fall.
+  - id: continue_to_monitor
+    label: The flow continues to the reason check.
+    label_de: Der Ablauf geht weiter zur Grundprüfung.
   pipeline_stage:
   - id: initialize
     label: Initialize
@@ -2825,7 +2878,7 @@ enums:
   - id: finalize
     label: Finalize
     purpose:
-      de: "Aufräumen und berichten: heruntergeladene Dateien löschen, Anwendungen schließen, den Ausgang festhalten. Läuft auch, wenn eine frühere Stufe fehlschlug."
+      de: "Heruntergeladene Dateien löschen, Anwendungen schließen, den Ausgang festhalten. Läuft auch, wenn eine frühere Stufe fehlschlug."
       en: "Clean up and report: delete the downloaded files, close the applications, record the outcome. Runs even when an earlier stage failed."
   automation_surface:
   - id: ui

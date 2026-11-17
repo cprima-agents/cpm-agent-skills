@@ -1,4 +1,4 @@
-| Position | Wert |
+| {{ table_headings["volume"][0] }} | {{ table_headings["volume"][1] }} |
 | --- | --- |
 | Zeitplan | {{ schedule or "[TBD]" }} |
 | Tagesvolumen | {{ daily_volume or "[TBD]" }} |

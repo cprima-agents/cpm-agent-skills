@@ -1,4 +1,4 @@
-| Item | Value |
+| {{ table_headings["volume"][0] }} | {{ table_headings["volume"][1] }} |
 | --- | --- |
 | Schedule | {{ schedule or "[TBD]" }} |
 | Daily volume | {{ daily_volume or "[TBD]" }} |

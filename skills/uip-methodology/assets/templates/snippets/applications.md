@@ -1,6 +1,6 @@
 {%- if applications %}
-| Name | Category | Version | Automation Surface | Access Method | In Scope | Previously Automated |
-| --- | --- | --- | --- | --- | --- | --- |
+| Name | Purpose | Automation Surface | Access Method | In Scope | Previously Automated |
+| --- | --- | --- | --- | --- | --- |
 {%- for a in applications %}
 {%- set in_scope = ("Yes" if a.in_scope else "No") if a.in_scope is defined else "[TBD]" %}
 {%- if a.previously_automated is defined %}
@@ -10,7 +10,7 @@
 {%- else %}
 {%- set prev = "—" %}
 {%- endif %}
-| {{ a.name }} | {{ a.category }} | {{ a.version or "" }} | {{ a.automation_surface or "" }} | {{ a.access_method or "" }} | {{ in_scope }} | {{ prev }} |
+| {{ a.name }} | {{ a.purpose or "" }} | {{ a.automation_surface or "" }} | {{ a.access_method or "" }} | {{ in_scope }} | {{ prev }} |
 {%- endfor %}
 {%- else %}
 [TBD]

@@ -30,7 +30,7 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 from cpm_rpa.renderer import resolve_text  # noqa: E402
-from yaml_graph import MODELS, diagram_view, models_of, number  # noqa: E402
+from yaml_graph import MODELS, diagram_view, models_of, number, parent_of, reading_order  # noqa: E402
 
 NOTICE = "Generated from process.yaml. Do not edit; copy the file (drop '.generated') and work on the copy."
 
@@ -66,6 +66,7 @@ class Diagram:
     lanes: list[tuple[str, str]] = field(default_factory=list)  # (id, label); empty = no swimlanes
     comparison: bool = False
     bands: list[tuple[str, str]] = field(default_factory=list)  # (id, label) of the expanded steps drawn as bands
+    direction: str = "LR"  # LR = left to right, TB = top to bottom
 
     def children(self) -> dict[str | None, list[Node]]:
         out: dict[str | None, list[Node]] = defaultdict(list)
@@ -91,8 +92,24 @@ def build_diagram(process: dict[str, Any], diagram: dict[str, Any], lang: str) -
     named = {s["id"]: s for s in process["steps"]}
     bands: list[tuple[str, str]] = []
     nodes = []
+    order = {sid: i for i, sid in enumerate(reading_order(process, models[0]))} if len(models) == 1 else {}
+
+    def activities(step_id: str) -> str:
+        """The next-level activities of a step, comma-separated, in reading order (its tasks, no gateways)."""
+        kids = [
+            k
+            for k in process["steps"]
+            if parent_of(k, models[0]) == step_id and models[0] in models_of(k) and k.get("type") == "task"
+        ]
+        kids.sort(key=lambda k: order.get(k["id"], 0))
+        return "; ".join(str(resolve_text(k.get("label"), lang) or k["id"]) for k in kids)
+
     for s in view["steps"]:
         text = str(resolve_text(s.get("label"), lang) or s["id"])
+        if diagram.get("list_children") and diagram.get("detail") == "high-level" and order:
+            listing = activities(s["id"])  # a box that hides its steps names them: title, then the list
+            if listing:
+                text = f"{text}\n{listing}"
         own = models_of(s)
         band = s.get("band") if with_bands else None
         if band and band not in [b for b, _ in bands]:
@@ -121,9 +138,15 @@ def build_diagram(process: dict[str, Any], diagram: dict[str, Any], lang: str) -
     ]
     top = [n for n in nodes if n.parent is None]
     lanes: list[tuple[str, str]] = []
-    if top and all(n.lane for n in top):  # swimlanes only when every top-level step has a lane
+    swimlanes = diagram.get("swimlanes", True)  # `swimlanes: false` draws a plain flow, whatever lanes the steps name
+    if swimlanes and top and all(n.lane for n in top):  # swimlanes only when every top-level step has a lane
         lanes = [(x["id"], x.get("label") or x["id"]) for x in process.get("lanes") or [] if any(n.lane == x["id"] for n in top)]
-    return Diagram(diagram["id"], str(resolve_text(diagram.get("title"), lang)), nodes, edges, lanes, comparison, bands)
+    direction = "TB" if diagram.get("direction") == "TB" else "LR"
+    if not lanes:
+        bands = []  # a band is a strip across lanes; without lanes there is nothing to cross
+    return Diagram(
+        diagram["id"], str(resolve_text(diagram.get("title"), lang)), nodes, edges, lanes, comparison, bands, direction
+    )
 
 
 # ── Mermaid ───────────────────────────────────────────────────────────────
@@ -138,16 +161,24 @@ def _q(text: str) -> str:
     return text.replace('"', "#quot;")
 
 
+def _html(label: str) -> str:
+    """A label with a list below its title: the title in bold, the list on the next line. Plain text stays as it is."""
+    if "\n" not in label:
+        return label
+    title, _, rest = label.partition("\n")
+    return f"<b>{title}</b><br>{rest.replace(chr(10), '<br>')}"
+
+
 def to_mermaid(d: Diagram) -> str:
     kids = d.children()
-    lines = ["---", f'title: "{_q(d.title)}"', "---", f"%% {NOTICE}", "flowchart LR"]
+    lines = ["---", f'title: "{_q(d.title)}"', "---", f"%% {NOTICE}", f"flowchart {'TD' if d.direction == 'TB' else 'LR'}"]
 
     def emit(parent: str | None, nodes: list[Node], depth: int) -> None:
         pad = "  " * depth
         for n in nodes:
             text = _q(n.label)
             if kids[n.id]:
-                lines.extend([f'{pad}subgraph {n.id}["{text}"]', f"{pad}  direction LR"])
+                lines.extend([f'{pad}subgraph {n.id}["{text}"]', f"{pad}  direction {d.direction}"])
                 emit(n.id, kids[n.id], depth + 1)
                 lines.append(f"{pad}end")
             elif n.kind == "gateway":
@@ -155,7 +186,7 @@ def to_mermaid(d: Diagram) -> str:
             elif n.kind in ("start", "end", "event"):
                 lines.append(f'{pad}{n.id}(["{text}"])')
             else:
-                lines.append(f'{pad}{n.id}["{text}"]')
+                lines.append(f'{pad}{n.id}["{_html(text)}"]')
 
     if d.lanes:  # Mermaid has no swimlanes; every lane becomes a group
         for lane_id, label in d.lanes:
@@ -180,6 +211,8 @@ def to_mermaid(d: Diagram) -> str:
 
 TASK, GATEWAY, EVENT, EVENT_BOX = (160, 60), (50, 50), (40, 40), (140, 76)
 GAP_X, GAP_Y, PAD, HEADER, TITLE_H = 60, 30, 20, 30, 50
+GAP_V = 50  # the space between two ranks of a top-to-bottom flow; room for an arrow and the name of a branch
+CHAR_W = 7  # the width of one character of a title, estimated, so a container is wide enough for its title
 POOL_HEADER, LANE_HEADER, LANE_PAD, LANE_MIN = 30, 20, 25, 120
 BAND_H, BAND_GAP = 30, 4  # the title strip of a band above the pool; the space between two bands
 
@@ -196,6 +229,9 @@ class Layout:
 
 
 def _base(n: Node) -> tuple[int, int]:
+    if n.kind == "task" and "\n" in n.label:  # a box with a list below its title: wide, and tall enough for the lines
+        listing = n.label.partition("\n")[2]
+        return 380, 34 + 18 * (-(-len(listing) // 52))
     return {"gateway": GATEWAY, "task": TASK}.get(n.kind, EVENT_BOX)
 
 
@@ -243,6 +279,23 @@ def layout(d: Diagram) -> Layout:
         cols = [[n.id for n in nodes if column[n.id] == c] for c in range(max(column.values(), default=-1) + 1)]
         col_w = [max(sizes[i][0] for i in col) for col in cols]
         col_h = [sum(sizes[i][1] for i in col) + GAP_Y * (len(col) - 1) for col in cols]
+        if d.direction == "TB" and not d.lanes:  # top to bottom: a rank is a row, the steps of a rank sit side by side
+            side = 2 * GAP_X  # room for the names of the branches that leave a gateway to the left and the right
+            row_w = [sum(sizes[i][0] for i in col) + side * (len(col) - 1) for col in cols]
+            row_h = [max(sizes[i][1] for i in col) for col in cols]
+            width = max(row_w, default=0)
+            if parent is not None:  # a container is at least as wide as its title
+                title = next(n.label for n in d.nodes if n.id == parent)
+                width = max(width, int(CHAR_W * len(title)) + 20 - 2 * PAD)
+            y = 0
+            for col, rw, rh in zip(cols, row_w, row_h):
+                x = (width - rw) // 2
+                for i in col:
+                    w, h = sizes[i]
+                    out.boxes[i] = (x, y + (rh - h) // 2, w, h)
+                    x += w + side
+                y += rh + GAP_V
+            return width, sum(row_h) + GAP_V * max(len(cols) - 1, 0)
         height = max(col_h, default=0)
         x = 0
         for col, cw, ch in zip(cols, col_w, col_h):
@@ -323,6 +376,12 @@ def _edge_ports(d: Diagram, e: Edge, columns: dict[str, int]) -> str:
     if src.parent != dst.parent:
         return ""
     gap = columns[e.dst] - columns[e.src]
+    if d.direction == "TB" and not d.lanes:
+        if e.loop or gap < 1:
+            return ""
+        if gap > 1:  # a step is skipped: go round it on the left, along a line that clears every step it passes
+            return _port("left", "exit") + _port("left", "entry")
+        return _port("bottom", "exit") + _port("top", "entry")
     if d.lanes and src.parent is None and src.lane != dst.lane:
         order = [lane for lane, _ in d.lanes]
         below = order.index(dst.lane) > order.index(src.lane)
@@ -334,6 +393,22 @@ def _edge_ports(d: Diagram, e: Edge, columns: dict[str, int]) -> str:
     if gap == 1:  # the next column: leave at the right and enter at the left, so branches do not cross
         return _port("right", "exit") + _port("left", "entry")
     return ""
+
+
+def _skip_points(d: Diagram, e: Edge, lay: Layout) -> list[tuple[int, int]]:
+    """The two bends of an edge that skips a rank in a top-to-bottom flow: a vertical line left of every step it passes."""
+    by_id = {n.id: n for n in d.nodes}
+    src, dst = by_id[e.src], by_id[e.dst]
+    ox, oy = (PAD, HEADER + PAD) if src.parent else (0, TITLE_H)  # where the level starts inside its owner
+    first, last = lay.columns[src.id], lay.columns[dst.id]
+    span = [n for n in d.nodes if n.parent == src.parent and first <= lay.columns[n.id] <= last]
+    x = ox + min(lay.boxes[n.id][0] for n in span) - 15
+
+    def middle(n: Node) -> int:
+        _x, y, _w, h = lay.boxes[n.id]
+        return oy + y + h // 2
+
+    return [(x, middle(src)), (x, middle(dst))]
 
 
 def _cell(root: ET.Element, cid: str, value: str, style: str, parent: str, box: Box) -> None:
@@ -348,7 +423,8 @@ def to_drawio(d: Diagram) -> str:
     root = ET.Element("root")
     ET.SubElement(root, "mxCell", id="0")
     ET.SubElement(root, "mxCell", id="1", parent="0")
-    _cell(root, "diagram-title", d.title, _STYLE_TITLE, "1", (0, 0, 700, 30))
+    # the title is as wide as its text: a wider cell would widen the exported image with empty space on the right
+    _cell(root, "diagram-title", d.title, _STYLE_TITLE, "1", (0, 0, 11 * len(d.title) + 20, 30))
 
     if d.lanes:
         pool_w, pool_h = lay.pool
@@ -365,6 +441,7 @@ def to_drawio(d: Diagram) -> str:
     # steps with an edge on their bottom side: a gateway's name goes above it there, so the edge does not cross the name
     low = {e.src for e in d.edges if "exitX=0.5;exitY=1" in ports[(e.src, e.dst)]}
     low |= {e.dst for e in d.edges if "entryX=0.5;entryY=1" in ports[(e.src, e.dst)]}
+    flow = d.direction == "TB" and not d.lanes  # top to bottom: the names stand beside a shape, not under it
 
     def emit(parent: str | None) -> None:
         for n in kids[parent]:
@@ -381,16 +458,21 @@ def to_drawio(d: Diagram) -> str:
                 emit(n.id)
             elif n.kind == "gateway":
                 _cell(root, n.id, "", _STYLE_GATEWAY.format(kind=n.gateway or "exclusive") + fill, owner, (x, y, w, h))
-                if n.id in low:
+                if flow:
+                    _cell(root, f"{n.id}-label", n.label, _STYLE_LABEL + "align=left;verticalAlign=middle;", owner, (x + w + 6, y + h // 2 - 17, 140, 34))
+                elif n.id in low:
                     _cell(root, f"{n.id}-label", n.label, _STYLE_LABEL + "verticalAlign=bottom;", owner, (x + w // 2 - 70, y - 36, 140, 34))
                 else:
                     _cell(root, f"{n.id}-label", n.label, _STYLE_LABEL, owner, (x + w // 2 - 70, y + h + 2, 140, 34))
             elif n.kind in _EVENT_LOOK:
                 outline, symbol = _EVENT_LOOK[n.kind]
                 _cell(root, n.id, "", _STYLE_EVENT.format(outline=outline, symbol=symbol) + fill, owner, (x + (w - EVENT[0]) // 2, y, *EVENT))
-                _cell(root, f"{n.id}-label", n.label, _STYLE_LABEL, owner, (x, y + EVENT[1] + 2, w, 34))
+                if flow:
+                    _cell(root, f"{n.id}-label", n.label, _STYLE_LABEL + "align=left;verticalAlign=middle;", owner, (x + (w + EVENT[0]) // 2 + 6, y + EVENT[1] // 2 - 17, 150, 34))
+                else:
+                    _cell(root, f"{n.id}-label", n.label, _STYLE_LABEL, owner, (x, y + EVENT[1] + 2, w, 34))
             else:
-                _cell(root, n.id, n.label, _STYLE_TASK + fill, owner, (x, y, w, h))
+                _cell(root, n.id, _html(n.label), _STYLE_TASK + fill, owner, (x, y, w, h))
 
     emit(None)
     owner_of = {n.id: n.parent or "1" for n in d.nodes}
@@ -400,7 +482,13 @@ def to_drawio(d: Diagram) -> str:
             root, "mxCell", id=f"edge-{e.src}-{e.dst}", value=e.label, style=style, edge="1",
             parent=owner_of[e.src], source=e.src, target=e.dst,
         )
-        ET.SubElement(c, "mxGeometry", relative="1").set("as", "geometry")
+        geometry = ET.SubElement(c, "mxGeometry", relative="1")
+        geometry.set("as", "geometry")
+        if flow and not e.loop and "exitX=0;exitY=0.5" in ports[(e.src, e.dst)] and "entryX=0;entryY=0.5" in ports[(e.src, e.dst)]:
+            points = ET.SubElement(geometry, "Array")
+            points.set("as", "points")
+            for px, py in _skip_points(d, e, lay):
+                ET.SubElement(points, "mxPoint", x=str(px), y=str(py))
 
     model = ET.Element(
         "mxGraphModel", dx="1000", dy="1000", grid="1", gridSize="10", guides="1", tooltips="1", connect="1",
@@ -419,7 +507,7 @@ def to_drawio(d: Diagram) -> str:
 # ── files ─────────────────────────────────────────────────────────────────
 
 FORMATS = {"drawio": ("drawio", to_drawio), "mermaid": ("mmd", to_mermaid)}
-IMAGE_FORMATS = ("png", "svg")  # exported from the .drawio file with the draw.io desktop app, when it is available
+IMAGE_FORMATS = ("png", "svg", "pdf")  # exported from the .drawio file with the draw.io desktop app, when it is available
 
 
 def canonical_name(diagram_id: str) -> str:
@@ -471,6 +559,8 @@ def export_image(drawio: Path, fmt: str, timeout: float = 90.0) -> Path | None:
     try:
         target.unlink(missing_ok=True)
         cmd = [exe, "-x", "-f", fmt, "-b", "10", "-o", str(target), str(drawio)]
+        if fmt == "pdf":
+            cmd.insert(4, "--crop")  # the page is as big as the diagram, whatever its size: no paper size
         proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
         return None
@@ -489,21 +579,36 @@ def export_image(drawio: Path, fmt: str, timeout: float = 90.0) -> Path | None:
     return target if target.exists() and target.stat().st_size > 0 else None
 
 
+def combine_pdfs(parts: list[tuple[str, Path]], target: Path) -> Path:
+    """One PDF from several: the pages in the given order, each with the size it has, one bookmark per diagram."""
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    for title, path in parts:
+        writer.append(str(path), outline_item=title)
+    with target.open("wb") as handle:
+        writer.write(handle)
+    return target
+
+
 def write_diagrams(
     process: dict[str, Any],
     out_dir: Path,
     langs: list[str],
     formats: list[str] | None = None,
     only: list[str] | None = None,
+    combine: str | None = None,
 ) -> tuple[list[Path], list[str]]:
     """Write every diagram of the process in every language and format. Only `.generated` files are written.
 
     Returns the written paths and the warnings. A png or svg that could not be exported is a warning, not an error.
+    With `combine` and the format pdf, the pdf files of one language are also merged into `<combine>.<lang>.generated.pdf`.
     """
     wanted = formats or ["drawio", "mermaid"]
     written: list[Path] = []
     warnings: list[str] = []
     out_dir.mkdir(parents=True, exist_ok=True)
+    pages: dict[str, list[tuple[str, Path]]] = defaultdict(list)  # per language: (title, pdf) in diagram order
     for diagram in process.get("diagrams") or []:
         if only and diagram["id"] not in only:
             continue
@@ -520,6 +625,11 @@ def write_diagrams(
                 image = export_image(drawio, fmt)
                 if image:
                     written.append(image)
+                    if fmt == "pdf":
+                        pages[lang].append((built.title, image))
                 else:
                     warnings.append(f"no {fmt} for {drawio.name}: the draw.io app was not found or the export failed")
+    if combine and "pdf" in wanted:
+        for lang, parts in pages.items():
+            written.append(combine_pdfs(parts, out_dir / f"{combine}.{lang}.generated.pdf"))
     return written, warnings

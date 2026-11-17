@@ -29,6 +29,12 @@
 | 1.0 | Data Protection Officer (Datenschutzbeauftragter) | [TBD] | [TBD] | |
 <!-- #endregion pdd_approvals -->
 
+## Summary
+
+<!-- #region executive_summary -->
+[TBD]
+<!-- #endregion executive_summary -->
+
 ## 1. Introduction
 
 ### 1.1 Objectives
@@ -129,8 +135,6 @@ Catalogue every application and platform component the robot must interact with 
 <!-- #region process_map -->
 [TBD — attach high-level map]
 <!-- #endregion process_map -->
-
-[TBD — attach keystroke-level map]
 
 ### 2.5 AS-IS Process Steps
 
@@ -270,4 +274,4 @@ The decisions the process makes, each with its question, the data it reads and i
 
 ## 5. Additional Documentation
 
-See `[ProcessName]-additional-docs.md` in the project folder.
+[TBD]

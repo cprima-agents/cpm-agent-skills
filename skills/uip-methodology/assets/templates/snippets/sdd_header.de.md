@@ -1,4 +1,4 @@
-| Position | Wert |
+| {{ table_headings["sdd_header"][0] }} | {{ table_headings["sdd_header"][1] }} |
 | --- | --- |
 | SDD-Version | {{ sdd_version or "1.0" }} |
 | SDD-Datum | {{ sdd_date or "[JJJJ-MM-TT]" }} |

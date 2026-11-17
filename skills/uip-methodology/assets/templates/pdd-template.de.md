@@ -26,6 +26,12 @@
 | 1.0 | Prozessverantwortlicher | [TBD] | [TBD] | |
 <!-- #endregion pdd_approvals -->
 
+## Zusammenfassung
+
+<!-- #region executive_summary -->
+[TBD]
+<!-- #endregion executive_summary -->
+
 ## 1. Einleitung
 
 ### 1.1 Ziele
@@ -92,8 +98,6 @@ Jede Anwendung und Plattformkomponente auflisten, mit der der Roboter arbeiten m
 <!-- #region process_map -->
 [TBD — Übersichtsdiagramm beifügen]
 <!-- #endregion process_map -->
-
-[TBD — Diagramm auf Tastenebene beifügen]
 
 ### 2.5 AS-IS-Prozessschritte
 
@@ -212,4 +216,4 @@ Die Entscheidungen, die der Prozess trifft, jeweils mit ihrer Frage, den Daten, 
 
 ## 5. Weitere Dokumentation
 
-Siehe `[Prozessname]-additional-docs.md` im Projektordner.
+[TBD]

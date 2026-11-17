@@ -1,4 +1,4 @@
-| Position | Wert |
+| {{ table_headings["process_overview"][0] }} | {{ table_headings["process_overview"][1] }} |
 | --- | --- |
 | Prozessname | {{ process_name or "[TBD]" }} |
 | Prozessbereich / Funktion | {{ process_area_function or "[TBD]" }} |

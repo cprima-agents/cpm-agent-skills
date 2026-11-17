@@ -44,6 +44,7 @@ TEXT_PATHS: dict[str, list[str]] = {
         "steps.*.scope_reason",
         "steps.*.scope_impact",
         "steps.*.scope_path",
+        "steps.*.screenshots.*.screen",
         "edges.*.condition",
         "terminal_states.*.label",
         "terminal_states.*.note",
@@ -105,6 +106,7 @@ TEXT_PATHS: dict[str, list[str]] = {
         "entities.*.source.container",
         "entities.*.source.location",
         "entities.*.fields.*.description",
+        "entities.*.fields.*.label",
         "entities.*.fields.*.scope_reason",
         "entities.*.fields.*.scope_impact",
         "entities.*.fields.*.scope_path",
@@ -304,6 +306,14 @@ def check(path: Path) -> list[str]:
                     )
                 if section == "contacts_technical" and not c.get("system"):
                     errors.append(f"{path}: {section}[{i}].system: missing")
+    if kind == "manifest":
+        for i, a in enumerate(data.get("artefacts") or []):
+            for j, ap in enumerate(a.get("approvals") or []):
+                if ap.get("role") not in enum_ids("stakeholder_role"):
+                    errors.append(
+                        f"{path}: artefacts[{i}].approvals[{j}].role: '{ap.get('role')}' is not one of "
+                        f"{', '.join(enum_ids('stakeholder_role'))}"
+                    )
     if kind == "reporting":
         for i, r in enumerate(data.get("reporting_requirements") or []):
             if not r.get("report_type"):

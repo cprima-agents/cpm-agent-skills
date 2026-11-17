@@ -86,6 +86,40 @@ def _expand_regions(text: str, lang: str | None = None) -> str:
     return _REGION_RE.sub(_sub, text)
 
 
+_HEADING_RE = re.compile(r"^#{3,6} ")
+_COMMENT_RE = re.compile(r"<!--(?!\s*#(?:end)?region\b).*?-->", re.DOTALL)  # every comment except a region marker
+
+
+def strip_hints(text: str) -> str:
+    """Remove what is only there for the author of a template, so a generated document holds no instructions.
+
+    Two things go: the instruction paragraph under a heading of level 3 or deeper (a paragraph that a region, a
+    comment or another heading follows; a paragraph before a table stays), and every HTML comment that is not a
+    region marker. The chapter intros under a level 2 heading stay: they are text for the reader.
+    """
+    lines = text.split("\n")
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        out.append(lines[i])
+        if _HEADING_RE.match(lines[i]) and i + 2 < len(lines) and lines[i + 1] == "" and lines[i + 2].strip():
+            j = i + 2
+            if not lines[j].lstrip().startswith(("<!--", "|", "#", "-", "*", "!", "{", "```", "[")):
+                k = j
+                while k < len(lines) and lines[k].strip():
+                    k += 1  # the paragraph is lines j..k-1
+                n = k
+                while n < len(lines) and not lines[n].strip():
+                    n += 1
+                if n >= len(lines) or lines[n].lstrip().startswith(("<!--", "#")):
+                    out.append("")
+                    i = k  # skip the paragraph; the blank line that follows is kept by the loop
+                    continue
+        i += 1
+    cleaned = _COMMENT_RE.sub("", "\n".join(out))
+    return re.sub(r"\n{3,}", "\n\n", cleaned)
+
+
 def resolve_text(value: Any, lang: str) -> Any:
     """Replace every text pair {de: ..., en: ...} in the data by its text in `lang`.
 
@@ -240,6 +274,11 @@ def render(
     if lang:
         data = resolve_text(data, lang)
     data = _resolve_derived(data, schema_path or DEFAULT_SCHEMA)
+    # the column headings of the tables of facts, from the schema, in the language of the document
+    headings = (_schema.load(schema_path or DEFAULT_SCHEMA).get("table_headings")) or {}
+    data["table_headings"] = {
+        region: [resolve_text(col, lang or "en") for col in cols] for region, cols in headings.items()
+    }
     if adr_dir and adr_dir.is_dir() and "adrs" not in data:
         adrs = [read_adr_file(p) for p in sorted(adr_dir.glob("*.md"))]
         if adrs:
@@ -283,6 +322,6 @@ def render(
     if lang and (TEMPLATES_DIR / f"{artefact}-template.{lang}.md").exists():
         template_file = f"{artefact}-template.{lang}.md"
     raw = (TEMPLATES_DIR / template_file).read_text(encoding="utf-8")
-    tmpl = env.from_string(_expand_regions(raw, lang))
+    tmpl = env.from_string(_expand_regions(strip_hints(raw), lang))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(tmpl.render(**data), encoding="utf-8")

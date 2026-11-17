@@ -62,6 +62,19 @@ def _word(table: dict[str, tuple[str, str]], key: str | None) -> dict[str, str] 
     return {"de": de_en[0], "en": de_en[1]} if de_en else ""
 
 
+def _enum_word(enum: str, value: Any) -> Any:
+    """What a document shows for an id of an enum of the schema: its German and English label.
+
+    "tbd" is shown as [TBD]; a value that is not an id of the enum is shown as it is written; a missing value stays missing.
+    """
+    if value in (None, ""):
+        return None
+    if value == "tbd":
+        return "[TBD]"
+    entry = next((e for e in enum_entries(enum) if e["id"] == value), None)
+    return {"de": entry.get("label_de") or entry["label"], "en": entry["label"]} if entry else value
+
+
 def _known(value: Any) -> Any:
     """A value the yaml states; "tbd" means not stated, so the template shows [TBD]."""
     return None if value in (None, "", "tbd") else value
@@ -191,7 +204,7 @@ def _pipeline(process: dict[str, Any], systems: dict[str, Any], data_model: dict
             {
                 "id": stage["id"],
                 "number": nums.get(container["id"], ""),
-                "name": stage["label"],
+                "name": container.get("label") or stage["label"],  # the label of the stage container, in both languages
                 "purpose": stage.get("purpose") or "",
                 "steps": [
                     {"number": nums.get(s["id"], ""), "label": s.get("label")}
@@ -385,7 +398,7 @@ def _field_of(data_model: dict[str, Any], ref: str) -> dict[str, Any]:
         if e.get("id") == entity_id:
             for f in e.get("fields") or []:
                 if f.get("name") == name:
-                    return {"name": f.get("source_key") or name, "container": (e.get("source") or {}).get("container") or ""}
+                    return {"name": f.get("label") or f.get("source_key") or name, "container": (e.get("source") or {}).get("container") or ""}
     return {"name": ref, "container": ""}
 
 
@@ -461,8 +474,9 @@ def build_project_data(
     exceptions = process.get("exceptions") or []
 
     def ref(step_id: str, lang: str) -> str:
-        """How a to-be step is named in a cell: its number if it has one, else its label."""
-        return numbers_to_be.get(step_id) or _t(by_id[step_id].get("label"), lang)
+        """How a to-be step is named in a cell: by its label. The to-be steps carry no number in the document, so a
+        number would point at nothing the reader can see."""
+        return _t(by_id[step_id].get("label"), lang)
 
     data: dict[str, Any] = {
         "process_name": process.get("process"),
@@ -499,8 +513,9 @@ def build_project_data(
         app = {
             "name": s.get("label") or s["id"],
             "category": "platform" if s.get("role") == "orchestration" else "application",
-            "automation_surface": s.get("interface"),
-            "access_method": s.get("accesstype"),
+            "purpose": s.get("description"),  # the description in systems.yaml is what the system is for
+            "automation_surface": _enum_word("interface_kind", s.get("interface")),
+            "access_method": _enum_word("access_kind", s.get("accesstype")),
         }
         for key in ("in_scope", "previously_automated", "dev_test_access"):
             if key in s:  # stated in the yaml; a missing key stays missing and renders as [TBD]
@@ -527,9 +542,9 @@ def build_project_data(
     data["integrations"] = [
         {
             "system": s.get("label") or s["id"],
-            "integration_method": _known(s.get("interface")),
+            "integration_method": _known(_enum_word("interface_kind", s.get("interface"))),
             "direction": _word(_DIRECTION, directions.get(s["id"])) or None,
-            "auth_method": _known(s.get("accesstype")),
+            "auth_method": _known(_enum_word("access_kind", s.get("accesstype"))),
         }
         for s in systems.get("systems") or []
         if s.get("in_scope")
@@ -540,7 +555,7 @@ def build_project_data(
             "trigger": x.get("message"),
             "robot_action": x.get("note"),
             "max_retries": "",
-            "escalation": x.get("resolution"),
+            "escalation": _enum_word("exception_resolution", x.get("resolution")),
         }
         for x in exceptions
         if "to-be" in models_of(x)
@@ -548,6 +563,7 @@ def build_project_data(
 
     data["process_steps"] = _process_steps(process, systems, decisions, process_dir, base_dir)
     data["decisions"] = _decisions(process, decisions, data_model or {})
+    data["executive_summary"] = _summary(process, systems, decisions, data)
 
     # business exceptions, from the exceptions of process.yaml
     be = []
@@ -564,14 +580,18 @@ def build_project_data(
                     else trigger
                 ),
                 "trigger": x.get("message"),
-                "robot_action": _pair(
-                    lambda lang, x=x: f"{_t(x.get('note'), lang)} ({x.get('resolution')})".strip()
+                "robot_action": _pair(  # what the robot does, then the remark on it
+                    lambda lang, x=x: f"{_t(_enum_word('exception_resolution', x.get('resolution')), lang)} "
+                    f"{_t(x.get('note'), lang)}".strip()
                 ),
             }
         )
     data["business_exceptions"] = be
-    data.update(_from_manifest(manifest or {}))
+    data.update(_from_manifest(manifest or {}, stakeholders))
     data.update(_contacts(stakeholders or {}, systems))
+    for field, role in (("process_owner", "process-owner"), ("responsible_architect", "sa")):  # PDD 2.1
+        if (person := _person(stakeholders or {}, role)) and person.get("name"):
+            data[field] = person["name"]
     if (objectives or {}).get("objectives"):  # region `objectives`: PDD 1.1, SDD 1.1; an empty list stays [TBD]
         data["objectives"] = list(objectives["objectives"])
     if (reporting or {}).get("reporting_requirements"):  # region `reporting_requirements`; the number is the position
@@ -583,6 +603,35 @@ def build_project_data(
     if (exception_handling or {}).get("default_se_handling"):  # region `default_se_handling`
         data["default_se_handling"] = list(exception_handling["default_se_handling"])
     return data
+
+
+def _summary(
+    process: dict[str, Any], systems: dict[str, Any], decisions: dict[str, Any] | None, data: dict[str, Any]
+) -> dict[str, Any]:
+    """The summary page before chapter 1 of the PDD, from what the other fields already hold.
+
+    Nothing new is asked of the yaml files: the purpose is the short description, the trigger is the as-is start
+    event, the volume is the daily volume, the systems are the systems of systems.yaml (the platform left out), and
+    the results are the measures of decisions.yaml and the end states of process.yaml. Content that chapters 1 to 4
+    also hold is repeated here on purpose: a reader gets the process in one page before the detail.
+    """
+    start = next(
+        (s for s in process.get("steps") or [] if s.get("type") == "start_event" and "as-is" in models_of(s)), None
+    )
+    results: list[Any] = []
+    for a in ((decisions or {}).get("actions") or {}).values():
+        if a.get("business_text"):
+            results.append(a["business_text"])
+    for t in process.get("terminal_states") or []:
+        if t.get("label"):
+            results.append(t["label"])
+    return {
+        "purpose": data.get("short_description"),
+        "trigger": start.get("label") if start else None,
+        "volume": data.get("daily_volume"),
+        "systems": [s.get("label") or s["id"] for s in systems.get("systems") or [] if s.get("role") != "orchestration"],
+        "results": results,
+    }
 
 
 def _contacts(stakeholders: dict[str, Any], systems: dict[str, Any]) -> dict[str, Any]:
@@ -606,12 +655,26 @@ def _contacts(stakeholders: dict[str, Any], systems: dict[str, Any]) -> dict[str
     return out
 
 
-def _from_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+def _role_label(role: Any) -> Any:
+    """The German and English label of a stakeholder role id; a value that is not an id stays as it is."""
+    entry = next((e for e in enum_entries("stakeholder_role") if e["id"] == role), None)
+    return {"de": entry.get("label_de") or entry["label"], "en": entry["label"]} if entry else role
+
+
+def _person(stakeholders: dict[str, Any], role: str) -> dict[str, Any] | None:
+    """The first business contact with this role, or None when the stakeholders do not name one."""
+    return next((c for c in stakeholders.get("contacts_business") or [] if c.get("role") == role), None)
+
+
+def _from_manifest(manifest: dict[str, Any], stakeholders: dict[str, Any] | None = None) -> dict[str, Any]:
     """Version, date, status, history and approvals of every document, from the manifest of the output repository.
 
     For an artefact `pdd` the keys are `pdd_version`, `pdd_date`, `pdd_status`, `pdd_history`, `pdd_approvals`.
     The version and the date shown in the header are those of the last history row, so they are stated once.
+    An approval names a `role` (an id of the enum stakeholder_role). Its name and department come from the
+    first stakeholder with that role, unless the approval states them; a person not known stays [TBD].
     """
+    stakeholders = stakeholders or {}
     out: dict[str, Any] = {}
     for a in manifest.get("artefacts") or []:
         key, history = a["id"], list(a.get("history") or [])
@@ -622,5 +685,16 @@ def _from_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
         if a.get("status"):
             out[f"{key}_status"] = a["status"]
         if a.get("approvals"):
-            out[f"{key}_approvals"] = list(a["approvals"])
+            rows = []
+            for ap in a["approvals"]:
+                who = _person(stakeholders, ap.get("role")) or {}
+                rows.append(
+                    {
+                        **ap,
+                        "role": _role_label(ap.get("role")),
+                        "name": ap.get("name") or who.get("name") or "[TBD]",
+                        "department": ap.get("department") or who.get("org_unit") or "[TBD]",
+                    }
+                )
+            out[f"{key}_approvals"] = rows
     return out

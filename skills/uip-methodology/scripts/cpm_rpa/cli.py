@@ -98,14 +98,19 @@ def render_diagrams(
     lang: str = typer.Option("de,en", "--lang", "-l", help="comma-separated: de, en"),
     diagram: str | None = typer.Option(None, "--diagram", help="comma-separated diagram ids; default: all"),
     fmt: str = typer.Option(
-        "drawio,mermaid,png", "--format", "-f", help="comma-separated: drawio, mermaid, png, svg"
+        "drawio,mermaid,png", "--format", "-f", help="comma-separated: drawio, mermaid, png, svg, pdf"
+    ),
+    combine: str | None = typer.Option(
+        None, "--combine", help="with the format pdf: also write all pdf files of a language as one, named <combine>.<lang>.generated"
     ),
 ) -> None:
-    """Write the diagrams of `process.yaml` as `<id>.<lang>.generated.drawio`, `.mmd`, `.png` and `.svg`.
+    """Write the diagrams of `process.yaml` as `<id>.<lang>.generated.drawio`, `.mmd`, `.png`, `.svg` and `.pdf`.
 
-    All formats are built from the same graph, so they show the same steps, numbers and links. png and svg are
+    All formats are built from the same graph, so they show the same steps, numbers and links. png, svg and pdf are
     exported from the .drawio file with the draw.io desktop app; when it is missing or the export fails, that is a
-    warning and the other files are still written. Only `.generated` files are written; a working copy (the same
+    warning and the other files are still written. A pdf page is as big as its diagram, with no paper size, so the
+    reader of the pdf zooms. `--combine diagrams` also writes `diagrams.<lang>.generated.pdf`, all diagrams in the
+    order of the process file, one bookmark each. Only `.generated` files are written; a working copy (the same
     name without `.generated`) is never touched.
     """
     from cpm_rpa import diagrams as _diagrams
@@ -117,7 +122,7 @@ def render_diagrams(
         raise typer.Exit(1)
     data = _YAML(typ="safe").load(process.read_text(encoding="utf-8")) or {}
     only = [x.strip() for x in diagram.split(",")] if diagram else None
-    written, warnings = _diagrams.write_diagrams(data, out_dir, langs, formats, only)
+    written, warnings = _diagrams.write_diagrams(data, out_dir, langs, formats, only, combine)
     for path in written:
         typer.echo(f"Written: {path}")
     for warning in warnings:
