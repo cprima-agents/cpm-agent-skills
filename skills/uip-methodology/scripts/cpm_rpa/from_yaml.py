@@ -184,7 +184,8 @@ def _pipeline(process: dict[str, Any], systems: dict[str, Any], data_model: dict
         data: dict[str, Any] = {}
         for e in data_model.get("entities") or []:
             source = e.get("source") or {}
-            if e.get("stage") == stage["id"] and source.get("application") not in (None, "automation") and source.get("container"):
+            stages = e.get("stage") if isinstance(e.get("stage"), list) else [e.get("stage")]  # one stage or a list
+            if stage["id"] in stages and source.get("container"):
                 data.setdefault(_t(source["container"], "en"), source["container"])
         rows.append(
             {

@@ -206,8 +206,9 @@ def check_entities(data: dict) -> list[str]:
             errors.append(f"entity '{eid}': id must be UPPER_SNAKE_CASE")
         if not e.get("name"):
             errors.append(f"entity {eid}: name missing")
-        if e.get("stage") and e["stage"] not in STAGES:
-            errors.append(f"entity {eid}: stage '{e['stage']}' is not one of {', '.join(STAGES)}")
+        for st in e["stage"] if isinstance(e.get("stage"), list) else [e.get("stage")]:  # one stage or a list
+            if st and st not in STAGES:
+                errors.append(f"entity {eid}: stage '{st}' is not one of {', '.join(STAGES)}")
         input_type = (e.get("source") or {}).get("input_type")
         if input_type and not _one_of(input_type, input_types):
             errors.append(f"entity {eid}: source.input_type '{input_type}' is not one of {', '.join(input_types)}")
