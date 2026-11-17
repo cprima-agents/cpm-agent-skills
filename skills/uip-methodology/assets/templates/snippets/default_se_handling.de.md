@@ -3,6 +3,5 @@
 - {{ item }}
 {%- endfor %}
 {%- else %}
-- Den aktuellen Schritt bis zu `[DEFAULT: 3]`-mal wiederholen
-- Falls ungelöst: Fehler protokollieren, Alarm an `[TBD — ops@company.com]` senden, sauber beenden
+[TBD]
 {%- endif %}

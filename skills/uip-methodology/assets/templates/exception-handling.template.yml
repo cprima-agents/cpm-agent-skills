@@ -10,3 +10,8 @@ version: "0.1"
 
 default_be_handling:
   - Text                        # one step of the handling, in the order the robot does it
+
+# The default handling of an unforeseen application error (PDD chapter 3, region `default_se_handling`).
+# An empty list leaves the region at [TBD]; the skill states no default handling, no retry count and no alert address.
+default_se_handling:
+  - Text                        # one step of the handling, in the order the robot does it

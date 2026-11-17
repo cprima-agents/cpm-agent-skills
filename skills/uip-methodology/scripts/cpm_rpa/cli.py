@@ -191,6 +191,7 @@ def build_data(
         "objectives",
         "reporting_requirements",
         "default_be_handling",
+        "default_se_handling",
     ):
         if key not in derived:
             existing.pop(key, None)  # nothing found this time: never keep a stale value

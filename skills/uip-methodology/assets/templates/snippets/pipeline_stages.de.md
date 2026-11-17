@@ -3,8 +3,8 @@
 Der Roboter durchläuft diese Stufen in dieser Reihenfolge:
 
 {% for stage in pipeline -%}
-- **{{ (stage.number ~ " ") if stage.number else "" }}{{ stage.name }}:** {{ stage.purpose }}
-  - Schritte: {% for s in stage.steps %}{{ (s.number ~ " ") if s.number else "" }}{{ s.label }}{{ "; " if not loop.last else "" }}{% else %}noch keiner{% endfor %}
+- **{{ stage.name }}:** {{ stage.purpose }}
+  - Schritte: {% for s in stage.steps %}{{ s.label }}{{ "; " if not loop.last else "" }}{% else %}noch keiner{% endfor %}
   - Systeme: {{ stage.systems | join(", ") if stage.systems else "—" }}
   - Daten: {{ stage.data | join("; ") if stage.data else "—" }}
 {% endfor -%}

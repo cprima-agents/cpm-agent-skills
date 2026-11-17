@@ -579,6 +579,8 @@ def build_project_data(
         ]
     if (exception_handling or {}).get("default_be_handling"):  # region `default_be_handling`
         data["default_be_handling"] = list(exception_handling["default_be_handling"])
+    if (exception_handling or {}).get("default_se_handling"):  # region `default_se_handling`
+        data["default_se_handling"] = list(exception_handling["default_se_handling"])
     return data
 
 

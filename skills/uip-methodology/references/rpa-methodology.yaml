@@ -1046,7 +1046,7 @@ topics:
       default_se_handling:
         type: list
         item:
-          type: string
+          type: text  # a pair { de, en }; the source is exception-handling.yaml; an empty list stays [TBD]
   transforms:
     to_markdown: scripts/cpm_rpa/renderer.py
     from_markdown: scripts/cpm_rpa/parser.py

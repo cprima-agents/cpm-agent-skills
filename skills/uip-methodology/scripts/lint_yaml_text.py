@@ -94,6 +94,7 @@ TEXT_PATHS: dict[str, list[str]] = {
     ],
     "exception-handling": [
         "default_be_handling.*",
+        "default_se_handling.*",
     ],
     "stakeholders": [
         "contacts_business.*.notes",
